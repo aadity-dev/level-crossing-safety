@@ -1,10 +1,30 @@
-# Virtual Environments
+# =============================================================================
+# Level Crossing Safety Monitoring System - .gitignore
+# Enterprise-grade ignore rules for Python, React/Vite, AI models, and databases
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Environment Variables, Secrets & API Tokens (CRITICAL FOR SECURITY)
+# -----------------------------------------------------------------------------
+.env
+*.env
+.env.*
+!.env.example
+
+# -----------------------------------------------------------------------------
+# 2. Python Virtual Environments & Packages
+# -----------------------------------------------------------------------------
 .venv/
-.venv-py39-backup/
+.venv*/
 env/
 venv/
+ENV/
+env.bak/
+venv.bak/
 
-# Python cache & artifacts
+# -----------------------------------------------------------------------------
+# 3. Python Bytecode, Caches & Build Distributions
+# -----------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
@@ -22,40 +42,84 @@ parts/
 sdist/
 var/
 wheels/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Testing & Type checking
+# -----------------------------------------------------------------------------
+# 4. Node.js, Frontend (React / Vite) Artifacts
+# -----------------------------------------------------------------------------
+web/node_modules/
+node_modules/
+web/dist/
+web/build/
+web/.next/
+web/.cache/
+*.tsbuildinfo
+web/*.tsbuildinfo
+web/vite.config.d.ts
+web/vite.config.js
+.npm/
+.eslintcache
+
+# -----------------------------------------------------------------------------
+# 5. Databases, Journals & WAL Files
+# -----------------------------------------------------------------------------
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-shm
+*.sqlite3-wal
+*.db
+*.db-journal
+
+# -----------------------------------------------------------------------------
+# 6. Computer Vision Models, Large Binaries & Replay Artifacts
+# -----------------------------------------------------------------------------
+# PyTorch and ONNX model weights
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Video outputs, uploads, and captured evidence snapshots
+data/snapshots/
+data/uploads/
+data/annotated_runs/
+data/cache/
+data/public/
+data/controlled/validation/annotated_*
+data/controlled/validation/output_test.mp4
+runs/
+*.pdf
+
+# -----------------------------------------------------------------------------
+# 7. Testing, Profiling & Coverage
+# -----------------------------------------------------------------------------
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 .mypy_cache/
+.ruff_cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
 
-# OS and Editor artifacts
+# -----------------------------------------------------------------------------
+# 8. Operating System & Editor Artifacts
+# -----------------------------------------------------------------------------
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# Environment variables & secrets
-.env
-*.env
-.env.*
-!.env.example
-
-# Web Frontend artifacts
-web/node_modules/
-web/dist/
-
-# Large files & local outputs
-*.pt
-*.onnx
-runs/
-data/public/
-data/cache/
-*.sqlite3
-*.sqlite3-journal
-data/snapshots/
-data/controlled/validation/annotated_*.mp4
+*~
