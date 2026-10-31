@@ -735,6 +735,25 @@ with tab_alerts:
         st.markdown("##### 📲 Instant Remote Push Notification (Telegram Bot & Webhook Dispatcher)")
         st.caption("Sends high-priority mobile notifications and photographic evidence directly to the Station Master or loco-pilot cab.")
 
+        with st.expander("⚙️ Live Telegram Bot & Webhook Setup (Optional)", expanded=False):
+            st.markdown(
+                """
+                <p style="font-size: 0.82rem; color: #9CA3AF;">
+                    <b>To receive REAL alerts on your phone:</b><br/>
+                    1. Open Telegram, search <code>@BotFather</code>, and type <code>/newbot</code> to get your <b>Bot Token</b>.<br/>
+                    2. Message <code>@userinfobot</code> on Telegram to get your numeric <b>Chat ID</b>.<br/>
+                    3. Paste them below. If left blank, system runs in <b>Instant Simulation Mode</b>.
+                </p>
+                """,
+                unsafe_allow_html=True,
+            )
+            cfg_c1, cfg_c2 = st.columns(2)
+            with cfg_c1:
+                live_bot_token = st.text_input("Telegram Bot Token", value="", type="password", placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ")
+            with cfg_c2:
+                live_chat_id = st.text_input("Telegram Chat ID", value="", placeholder="e.g. 1234567890")
+            live_webhook = st.text_input("Custom REST Webhook URL (Optional)", value="", placeholder="e.g. https://webhook.site/your-custom-uuid")
+
         mob_c1, mob_c2 = st.columns([1.6, 1])
         with mob_c1:
             tele_msg = AlertNotifier.format_telegram_alert_text(
@@ -746,10 +765,16 @@ with tab_alerts:
             )
             st.code(tele_msg, language="markdown")
         with mob_c2:
-            st.markdown("**Channel:** Telegram Bot API & REST Webhook")
+            is_live_configured = bool(live_bot_token.strip() and live_chat_id.strip())
+            st.markdown(f"**Mode:** {'🟢 LIVE REAL DISPATCH' if is_live_configured else '🟡 SIMULATION MODE'}")
             st.caption("Photo Attachment: Active Forensic Snapshot")
             if st.button("🚀 Dispatch Emergency Mobile Push", use_container_width=True):
-                notifier = AlertNotifier(dry_run=True)
+                notifier = AlertNotifier(
+                    telegram_bot_token=live_bot_token.strip() or None,
+                    telegram_chat_id=live_chat_id.strip() or None,
+                    webhook_url=live_webhook.strip() or None,
+                    dry_run=not is_live_configured,
+                )
                 res_tele = notifier.dispatch_telegram(tele_msg, photo_path=chosen_snap)
                 res_hook = notifier.dispatch_webhook({
                     "alert_id": chosen_alert.alert_id,
@@ -758,7 +783,13 @@ with tab_alerts:
                     "message": chosen_alert.message,
                     "crossing_state": service.current_crossing_state.value,
                 })
-                st.success("✅ Alert & Evidence Photo Dispatched to Station Master Mobile OCC (Simulated Push OK)!")
+                if is_live_configured:
+                    if "TELEGRAM_HTTP_200" in res_tele.get("status", ""):
+                        st.success("🎉 REAL ALERT & EVIDENCE PHOTO DELIVERED TO YOUR TELEGRAM PHONE!")
+                    else:
+                        st.warning(f"Telegram API responded: {res_tele.get('status')} ({res_tele.get('error', '')})")
+                else:
+                    st.success("✅ Alert & Evidence Photo Dispatched to Station Master Mobile OCC (Simulated Push OK)!")
     else:
         st.info("No alerts generated yet.")
 

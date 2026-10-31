@@ -69,6 +69,8 @@ class AlertNotifier:
         photo_path: Optional[str | Path] = None,
     ) -> Dict[str, Any]:
         """Dispatches an emergency photo and message to the Station Master's Telegram."""
+        import requests
+
         record = {
             "channel": "TELEGRAM_BOT",
             "chat_id": self.telegram_chat_id or "@StationMasterAlerts",
@@ -83,17 +85,35 @@ class AlertNotifier:
             return record
 
         try:
-            # Real Telegram Bot API call
+            # Real Telegram Bot API call using requests
             if photo_path and Path(photo_path).exists():
                 api_url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendPhoto"
-                # Multipart or direct photo upload
-                logger.info(f"Calling real Telegram Bot API at {api_url}")
+                with open(photo_path, "rb") as pf:
+                    resp = requests.post(
+                        api_url,
+                        data={"chat_id": self.telegram_chat_id, "caption": message, "parse_mode": "Markdown"},
+                        files={"photo": pf},
+                        timeout=10,
+                    )
+                record["status"] = f"TELEGRAM_HTTP_{resp.status_code}"
+                if resp.status_code == 200:
+                    logger.info(f"REAL TELEGRAM PHOTO SENT -> Chat {self.telegram_chat_id}")
+                else:
+                    logger.warning(f"TELEGRAM API RESPONSE: {resp.text}")
+                    record["error"] = resp.text
             else:
                 api_url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
-                post_data = urllib.parse.urlencode({"chat_id": self.telegram_chat_id, "text": message, "parse_mode": "Markdown"}).encode("utf-8")
-                req = urllib.request.Request(api_url, data=post_data)
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    record["status"] = f"TELEGRAM_HTTP_{resp.getcode()}"
+                resp = requests.post(
+                    api_url,
+                    json={"chat_id": self.telegram_chat_id, "text": message, "parse_mode": "Markdown"},
+                    timeout=10,
+                )
+                record["status"] = f"TELEGRAM_HTTP_{resp.status_code}"
+                if resp.status_code == 200:
+                    logger.info(f"REAL TELEGRAM MESSAGE SENT -> Chat {self.telegram_chat_id}")
+                else:
+                    logger.warning(f"TELEGRAM API RESPONSE: {resp.text}")
+                    record["error"] = resp.text
         except Exception as e:
             record["status"] = f"ERROR: {e}"
             logger.warning(f"TELEGRAM DISPATCH FAILED: {e}")
