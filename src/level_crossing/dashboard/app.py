@@ -457,8 +457,28 @@ with tab_replay:
             help="Simulates what signal the vision system receives from the railway signaling circuit during this video.",
         )
 
+        process_limit = st.selectbox(
+            "Inference Frame Limit",
+            [
+                "Standard Clip (300 frames / ~10s)",
+                "Quick Test (150 frames / ~5s)",
+                "Extended Clip (600 frames / ~20s)",
+                "Full Video (Process all frames)",
+            ],
+            index=0,
+            help="For YouTube or long videos, limits processing to keep inference fast and responsive.",
+        )
+        if "150" in process_limit:
+            limit_frames = 150
+        elif "300" in process_limit:
+            limit_frames = 300
+        elif "600" in process_limit:
+            limit_frames = 600
+        else:
+            limit_frames = None
+
         st.markdown(
-            """
+            r"""
             <div style="background-color: #1F2937; border-left: 4px solid #06B6D4; padding: 10px 14px; border-radius: 4px; margin: 14px 0;">
                 <p style="margin: 0; font-size: 0.8rem; color: #D1D5DB;">
                     <b>Safety Engine Contract:</b> Evaluates every frame using YOLOv8 perception + ByteTrack tracking. Bottom-center foot coordinates are projected into calibrated safety zones. Dwell times $\ge 0.5s$ trigger confirmed alerts.
@@ -473,8 +493,7 @@ with tab_replay:
     with col_display:
         output_dir = Path("data/annotated_runs")
         output_dir.mkdir(parents=True, exist_ok=True)
-        video_stem = Path(selected_video).stem if selected_video else "scenario_01"
-        target_output_mp4 = str(output_dir / f"annotated_{video_stem}.mp4")
+        default_target_mp4 = str(output_dir / "annotated_latest.mp4")
 
         if run_btn:
             if not selected_video:
@@ -486,11 +505,14 @@ with tab_replay:
                 if err_msg:
                     st.error(f"❌ {err_msg}")
                 elif resolved_src:
+                    video_stem = Path(resolved_src).stem
+                    target_output_mp4 = str(output_dir / f"annotated_{video_stem}.mp4")
+
                     progress_bar = st.progress(0, text="Initializing Safety Pipeline with Apple MPS...")
                     pipeline = ReplayPipeline(config=config, db_path="data/level_crossing.sqlite3", save_to_db=True)
 
                     t0 = time.time()
-                    max_f = 300 if is_stream else None
+                    max_f = 300 if is_stream else limit_frames
                     summary = pipeline.run(
                         video_path=resolved_src,
                         crossing_state_timeline=lambda t: replay_state,
@@ -515,7 +537,7 @@ with tab_replay:
                     st.rerun()
 
         # Display active or default annotated video
-        active_video = st.session_state.get("active_annotated_video", target_output_mp4)
+        active_video = st.session_state.get("active_annotated_video", default_target_mp4)
         if not Path(active_video).exists():
             active_video = "data/controlled/validation/annotated_scenario_01.mp4"
 
