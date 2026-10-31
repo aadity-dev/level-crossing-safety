@@ -142,6 +142,93 @@ def generate_scenario_1_person_intrusion(output_dir: Path) -> Tuple[Path, Path]:
     return video_path, csv_path
 
 
+def generate_scenario_2_multi_person_intrusion(output_dir: Path) -> Path:
+    """Generates Scenario 2 (Multi-Person Intrusion):
+    - 150 frames @ 30fps (5.0s).
+    - Resolution: 640x480.
+    - Person 1 (left to right) enters Danger Track at t=1.0s, lingers until t=3.8s.
+    - Person 2 (right to left) enters Danger Track at t=1.6s, crosses until t=4.2s.
+    - Tests simultaneous multi-target ByteTrack association and multi-event arbitration.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    video_path = output_dir / "scenario_02_multi_person_intrusion.mp4"
+
+    width, height, fps = 640, 480, 30.0
+    num_frames = 150
+    sprite1 = get_pedestrian_sprite()
+    # Person 2: slightly scaled and horizontally flipped sprite for visual diversity
+    sprite2 = cv2.flip(cv2.resize(sprite1, (48, 128)), 1)
+    s1_w, s1_h = sprite1.shape[1], sprite1.shape[0]
+    s2_w, s2_h = sprite2.shape[1], sprite2.shape[0]
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out = cv2.VideoWriter(str(video_path), fourcc, fps, (width, height))
+
+    for f in range(num_frames):
+        img = np.full((height, width, 3), 115, dtype=np.uint8)
+
+        # Draw road
+        cv2.rectangle(img, (200, 0), (440, height), (75, 75, 75), -1)
+        cv2.line(img, (320, 0), (320, height), (220, 220, 220), 2)
+
+        # Draw rails
+        cv2.rectangle(img, (0, 210), (width, 226), (45, 45, 45), -1)
+        cv2.rectangle(img, (0, 290), (width, 306), (45, 45, 45), -1)
+
+        # Sleepers
+        for sx in range(0, width, 25):
+            cv2.rectangle(img, (sx, 195), (sx + 10, 320), (90, 60, 40), -1)
+
+        # Boom barrier posts
+        cv2.circle(img, (185, 170), 12, (200, 30, 30), -1)
+        cv2.circle(img, (455, 340), 12, (200, 30, 30), -1)
+
+        # --- Trajectory for Person 1 (walking from top-left into center track) ---
+        if f < 30:
+            p1_x = int(220 + f * 1.5)
+            p1_y = int(40 + f * 4.6)
+        elif f < 110:
+            p1_x = int(265 + (f - 30) * 0.4)
+            p1_y = 180  # bottom y = 180 + 140 = 320 (in danger track)
+        else:
+            p1_x = int(297 + (f - 110) * 1.5)
+            p1_y = int(180 + (f - 110) * 5.0)
+
+        # --- Trajectory for Person 2 (walking from bottom-right into center track) ---
+        if f < 45:
+            p2_x = int(410 - f * 1.8)
+            p2_y = int(350 - f * 2.8)
+        elif f < 125:
+            p2_x = int(330 - (f - 45) * 0.5)
+            p2_y = int(190 + np.sin(f * 0.1) * 3)  # lingering around track
+        else:
+            p2_x = int(290 - (f - 125) * 3.0)
+            p2_y = int(190 - (f - 125) * 4.0)
+
+        # Composite Person 1
+        if 0 <= p1_y < height - s1_h and 0 <= p1_x < width - s1_w:
+            roi1 = img[p1_y : p1_y + s1_h, p1_x : p1_x + s1_w]
+            m1 = cv2.GaussianBlur(np.full((s1_h, s1_w, 3), 0.95, dtype=np.float32), (7, 7), 2)
+            img[p1_y : p1_y + s1_h, p1_x : p1_x + s1_w] = (
+                sprite1.astype(np.float32) * m1 + roi1.astype(np.float32) * (1.0 - m1)
+            ).astype(np.uint8)
+
+        # Composite Person 2
+        if 0 <= p2_y < height - s2_h and 0 <= p2_x < width - s2_w:
+            roi2 = img[p2_y : p2_y + s2_h, p2_x : p2_x + s2_w]
+            m2 = cv2.GaussianBlur(np.full((s2_h, s2_w, 3), 0.95, dtype=np.float32), (7, 7), 2)
+            img[p2_y : p2_y + s2_h, p2_x : p2_x + s2_w] = (
+                sprite2.astype(np.float32) * m2 + roi2.astype(np.float32) * (1.0 - m2)
+            ).astype(np.uint8)
+
+        out.write(img)
+
+    out.release()
+    return video_path
+
+
 if __name__ == "__main__":
-    vpath, cpath = generate_scenario_1_person_intrusion(Path("data/controlled/validation"))
-    print(f"Generated realistic scenario video: {vpath} and ground truth: {cpath}")
+    vpath1, cpath1 = generate_scenario_1_person_intrusion(Path("data/controlled/validation"))
+    print(f"Generated single-person scenario video: {vpath1}")
+    vpath2 = generate_scenario_2_multi_person_intrusion(Path("data/controlled/validation"))
+    print(f"Generated multi-person scenario video: {vpath2}")
