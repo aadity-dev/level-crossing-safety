@@ -1,2 +1,2 @@
 video_id,event_id,start_time,end_time,event_type,object_type,crossing_state,zone_entry_time,unsafe_state_start_time
-scenario_01_person_danger_track,GT-EVT-001,1.2,4.2,INTRUSION,person,TRAIN_APPROACHING,1.2,0.0
+scenario_01_person_danger_track,GT-EVT-001,1.2,4.0,INTRUSION,person,TRAIN_APPROACHING,1.2,0.0
