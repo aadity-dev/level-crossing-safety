@@ -31,6 +31,7 @@ class SafetyEvent:
     alert_ids: List[str] = field(default_factory=list)
     escalation_count: int = 0
     unsafe_duration: float = 0.0
+    confidence: float = 0.0
 
     @classmethod
     def create(
@@ -42,6 +43,7 @@ class SafetyEvent:
         crossing_state: CrossingState,
         timestamp: float,
         bbox: Optional[BoundingBox] = None,
+        confidence: float = 0.0,
     ) -> "SafetyEvent":
         return cls(
             event_id=f"EVT-{uuid.uuid4().hex[:8].upper()}",
@@ -56,6 +58,7 @@ class SafetyEvent:
             status=EventStatus.PENDING,
             last_bbox=bbox,
             unsafe_duration=0.0,
+            confidence=confidence,
         )
 
     def update_condition(
@@ -65,12 +68,15 @@ class SafetyEvent:
         zone_type: ZoneType,
         timestamp: float,
         bbox: Optional[BoundingBox] = None,
+        confidence: float = 0.0,
     ) -> bool:
         self.last_update_time = timestamp
         self.crossing_state = crossing_state
         self.zone_type = zone_type
         if bbox is not None:
             self.last_bbox = bbox
+        if confidence > 0.0:
+            self.confidence = max(self.confidence, confidence)
         self.unsafe_duration = max(0.0, timestamp - self.start_time)
 
         escalated = False

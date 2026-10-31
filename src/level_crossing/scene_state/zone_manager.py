@@ -31,6 +31,7 @@ class TrackSceneState:
     crossing_state: CrossingState
     entry_timestamp: Optional[float]
     timestamp: float
+    confidence: float = 0.0
 
 
 class ZoneManager:
@@ -85,6 +86,7 @@ class ZoneManager:
                     crossing_state=crossing_state,
                     entry_timestamp=entry_time,
                     timestamp=timestamp,
+                    confidence=track.confidence,
                 )
             )
 

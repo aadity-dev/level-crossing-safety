@@ -25,6 +25,7 @@ dependencies = [
     "ultralytics>=8.1.0",
     "torch>=2.2.0",
     "torchvision>=0.17.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]

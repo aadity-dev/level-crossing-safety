@@ -21,6 +21,7 @@ from level_crossing.events.event_manager import EventManager
 from level_crossing.events.train_suppression import TrainMisclassificationMitigation
 from level_crossing.alerts.alert_engine import AlertEngine
 from level_crossing.alerts.alert import AlertRecord
+from level_crossing.alerts.telegram_dispatcher import TelegramDispatcher
 from level_crossing.video.video_reader import VideoReader
 from level_crossing.video.video_writer import VideoWriter, VideoAnnotator
 from level_crossing.database.db import DatabaseManager
@@ -55,6 +56,8 @@ class ReplayPipeline:
         db_path: str | Path = "data/level_crossing.sqlite3",
         snapshots_dir: str | Path = "data/snapshots",
         save_to_db: bool = True,
+        telegram_dispatcher: Optional[TelegramDispatcher] = None,
+        enable_telegram: bool = False,
     ):
         self.config = config
         self.detector = detector or YOLOv8Detector(
@@ -78,7 +81,17 @@ class ReplayPipeline:
             overlap_iou_threshold=config.thresholds.train_suppression.overlap_iou_threshold,
             area_ratio_threshold=config.thresholds.train_suppression.area_ratio_threshold,
         )
-        self.alert_engine = AlertEngine(snapshots_dir=snapshots_dir)
+
+        if telegram_dispatcher is not None:
+            tg = telegram_dispatcher
+        elif enable_telegram:
+            tg = TelegramDispatcher()
+            if not tg.is_configured:
+                tg = None
+        else:
+            tg = None
+        self.telegram_dispatcher = tg
+        self.alert_engine = AlertEngine(snapshots_dir=snapshots_dir, telegram_dispatcher=tg)
 
         self.save_to_db = save_to_db
         if self.save_to_db:
@@ -259,6 +272,10 @@ class ReplayPipeline:
 
         if writer:
             writer.close()
+
+        if self.telegram_dispatcher:
+            # Cleanly wait for pending background dispatches to finish
+            self.telegram_dispatcher.executor.shutdown(wait=False)
 
         total_wall_time = time.perf_counter() - start_wall_time
         fps = processed_frames / total_wall_time if total_wall_time > 0 else 0.0

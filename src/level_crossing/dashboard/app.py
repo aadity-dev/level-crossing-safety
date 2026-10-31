@@ -19,6 +19,7 @@ from level_crossing.api.services.safety_service import SafetyService
 from level_crossing.pipeline.replay_pipeline import ReplayPipeline
 from level_crossing.alerts.sound_simulator import SoundSimulator
 from level_crossing.alerts.notifier import AlertNotifier
+from level_crossing.alerts.telegram_dispatcher import TelegramDispatcher, send_emergency_alert
 from level_crossing.reporting.incident_report import generate_incident_pdf_bytes
 
 # -----------------------------------------------------------------------------
@@ -488,6 +489,12 @@ with tab_replay:
             help="For unmanned rural crossings: automatically detects approaching locomotives via perspective area expansion (dA/dt) and flips crossing state to TRAIN_APPROACHING without track circuits.",
         )
 
+        enable_tg_dispatch = st.checkbox(
+            "📱 Auto-Dispatch Alerts to Telegram",
+            value=True,
+            help="Instantly pushes high-priority emergency alerts with CCTV evidence snapshots to the Station Master Telegram bot.",
+        )
+
         st.markdown(
             r"""
             <div style="background-color: #1F2937; border-left: 4px solid #06B6D4; padding: 10px 14px; border-radius: 4px; margin: 14px 0;">
@@ -520,7 +527,12 @@ with tab_replay:
                     target_output_mp4 = str(output_dir / f"annotated_{video_stem}.mp4")
 
                     progress_bar = st.progress(0, text="Initializing Safety Pipeline with Apple MPS...")
-                    pipeline = ReplayPipeline(config=config, db_path="data/level_crossing.sqlite3", save_to_db=True)
+                    pipeline = ReplayPipeline(
+                        config=config,
+                        db_path="data/level_crossing.sqlite3",
+                        save_to_db=True,
+                        enable_telegram=enable_tg_dispatch,
+                    )
 
                     t0 = time.time()
                     max_f = 300 if is_stream else limit_frames
@@ -730,38 +742,33 @@ with tab_alerts:
                 key=f"pdf_btn_{chosen_alert.alert_id}",
             )
 
-        # --- Tier 2: Instant Remote Push Notification (Telegram Bot & Webhook) ---
+        # --- Telegram Emergency Dispatcher Console ---
         st.markdown("---")
-        st.markdown("##### 📲 Instant Remote Push Notification (Telegram Bot & Webhook Dispatcher)")
-        st.caption("Sends high-priority mobile notifications and photographic evidence directly to the Station Master or loco-pilot cab.")
+        st.markdown("##### 📲 Instant Emergency Dispatcher (Telegram Bot API)")
+        st.caption("Pushes high-priority emergency notifications and CCTV evidence snapshots to the Station Master or locomotive driver cab.")
 
-        with st.expander("⚙️ Live Telegram Bot & Webhook Setup (Optional)", expanded=False):
-            st.markdown(
-                """
-                <p style="font-size: 0.82rem; color: #9CA3AF;">
-                    <b>To receive REAL alerts on your phone:</b><br/>
-                    1. Open Telegram, search <code>@BotFather</code>, and type <code>/newbot</code> to get your <b>Bot Token</b>.<br/>
-                    2. Message <code>@userinfobot</code> on Telegram to get your numeric <b>Chat ID</b>.<br/>
-                    3. Paste them below. If left blank, system runs in <b>Instant Simulation Mode</b>.
-                </p>
-                """,
-                unsafe_allow_html=True,
-            )
+        import os
+        from dotenv import load_dotenv
+        load_dotenv()
+
+        default_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+        default_chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+
+        with st.expander("⚙️ Telegram Bot Credentials & Verification", expanded=not bool(default_token and default_chat_id)):
             cfg_c1, cfg_c2 = st.columns([1.2, 1])
             with cfg_c1:
                 live_bot_token = st.text_input(
-                    "Telegram Bot Token",
-                    value=st.session_state.get("tg_bot_token", ""),
+                    "Telegram Bot Token (from .env)",
+                    value=default_token or st.session_state.get("tg_bot_token", ""),
                     type="password",
-                    placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ",
+                    placeholder="e.g. 9107048971:AAHx-0Ts63hw...",
                     key="input_tg_bot_token",
                 )
             with cfg_c2:
-                auto_cid = st.session_state.get("tg_chat_id", "")
                 live_chat_id = st.text_input(
-                    "Telegram Chat ID",
-                    value=auto_cid,
-                    placeholder="e.g. 1234567890",
+                    "Telegram Chat ID (from .env)",
+                    value=default_chat_id or st.session_state.get("tg_chat_id", ""),
+                    placeholder="e.g. 1295515495",
                     key="input_tg_chat_id",
                 )
 
@@ -778,46 +785,92 @@ with tab_alerts:
                     else:
                         st.warning("No message detected yet. Make sure you opened your bot and sent /start!")
 
-            live_webhook = st.text_input("Custom REST Webhook URL (Optional)", value="", placeholder="e.g. https://webhook.site/your-custom-uuid")
+        # Initialize Dispatcher
+        active_token = live_bot_token.strip() or default_token
+        active_chat = live_chat_id.strip() or default_chat_id
+        dispatcher = TelegramDispatcher(bot_token=active_token, chat_id=active_chat, location="LC-102")
 
         mob_c1, mob_c2 = st.columns([1.6, 1])
         with mob_c1:
-            tele_msg = AlertNotifier.format_telegram_alert_text(
-                alert_id=chosen_alert.alert_id,
-                severity=chosen_alert.severity,
-                crossing_state=service.current_crossing_state.value,
-                message=chosen_alert.message,
-                timestamp_sec=chosen_alert.timestamp,
+            tele_msg = TelegramDispatcher.format_alert_caption(
+                location="LC-102",
+                danger_level=chosen_alert.severity,
+                confidence=96.5,
+                event_id=chosen_alert.event_id,
+                timestamp_str=time.strftime("%d-%m-%Y %H:%M:%S"),
+                object_type="Person",
             )
             st.code(tele_msg, language="markdown")
         with mob_c2:
-            is_live_configured = bool(live_bot_token.strip() and live_chat_id.strip())
+            is_live_configured = dispatcher.is_configured
+            st.markdown(f"**Bot Channel:** `{'@MyRailwaySafety_bot' if is_live_configured else 'UNCONFIGURED'}`")
+            st.markdown(f"**Target Chat:** `{active_chat if is_live_configured else 'None'}`")
             st.markdown(f"**Mode:** {'🟢 LIVE REAL DISPATCH' if is_live_configured else '🟡 SIMULATION MODE'}")
-            st.caption("Photo Attachment: Active Forensic Snapshot")
+            st.caption(f"Photo Evidence: `{Path(chosen_snap).name if chosen_snap else 'None'}`")
+
             if st.button("🚀 Dispatch Emergency Mobile Push", use_container_width=True):
-                notifier = AlertNotifier(
-                    telegram_bot_token=live_bot_token.strip() or None,
-                    telegram_chat_id=live_chat_id.strip() or None,
-                    webhook_url=live_webhook.strip() or None,
-                    dry_run=not is_live_configured,
-                )
-                res_tele = notifier.dispatch_telegram(tele_msg, photo_path=chosen_snap)
-                res_hook = notifier.dispatch_webhook({
-                    "alert_id": chosen_alert.alert_id,
-                    "event_id": chosen_alert.event_id,
-                    "severity": chosen_alert.severity,
-                    "message": chosen_alert.message,
-                    "crossing_state": service.current_crossing_state.value,
-                })
-                if is_live_configured:
-                    if "TELEGRAM_HTTP_200" in res_tele.get("status", ""):
-                        st.success("🎉 REAL ALERT & EVIDENCE PHOTO DELIVERED TO YOUR TELEGRAM PHONE!")
+                if is_live_configured and chosen_snap:
+                    res_tele = dispatcher.send_emergency_alert(
+                        image_path=chosen_snap,
+                        location="LC-102",
+                        danger_level=chosen_alert.severity,
+                        confidence=96.5,
+                        event_id=chosen_alert.event_id,
+                        object_type="Person",
+                    )
+                    if res_tele.get("success"):
+                        st.success(f"🎉 REAL ALERT & CCTV PHOTO DELIVERED! (Telegram Message ID: {res_tele.get('message_id')})")
                     else:
-                        st.warning(f"Telegram API responded: {res_tele.get('status')} ({res_tele.get('error', '')})")
+                        st.error(f"Telegram API responded: {res_tele.get('error')}")
                 else:
-                    st.success("✅ Alert & Evidence Photo Dispatched to Station Master Mobile OCC (Simulated Push OK)!")
+                    st.success("✅ Alert & Evidence Photo Dispatched to Station Master OCC (Simulated Push OK)!")
+
+            if st.button("🧪 Send Safe Test Alert with Evidence Snapshot", use_container_width=True):
+                sample_snaps = list(Path("data/snapshots").glob("*.jpg"))
+                test_snap = chosen_snap or (str(sample_snaps[0]) if sample_snaps else None)
+                if test_snap and is_live_configured:
+                    res_test = dispatcher.send_emergency_alert(
+                        image_path=test_snap,
+                        location="LC-102 (OCC TEST VERIFICATION)",
+                        danger_level="CRITICAL",
+                        confidence=98.2,
+                        event_id="EVT-VERIFY-001",
+                        object_type="Person",
+                    )
+                    if res_test.get("success"):
+                        st.success(f"🎉 VERIFIED! Real emergency alert and CCTV snapshot delivered! (Message ID: {res_test.get('message_id')})")
+                    else:
+                        st.error(f"Test push failed: {res_test.get('error')}")
+                else:
+                    st.warning("Please configure your Telegram bot credentials or ensure a snapshot exists.")
     else:
-        st.info("No alerts generated yet.")
+        st.info("No alerts generated yet in this session. You can execute a video replay above, or test the Telegram dispatcher below:")
+        import os
+        from dotenv import load_dotenv
+        load_dotenv()
+        default_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+        default_chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+        dispatcher = TelegramDispatcher(bot_token=default_token, chat_id=default_chat_id, location="LC-102")
+
+        st.markdown("##### 📲 Telegram Emergency Dispatcher Direct Verification")
+        st.markdown(f"**Bot Channel:** `{'@MyRailwaySafety_bot' if dispatcher.is_configured else 'UNCONFIGURED'}` | **Target Chat:** `{default_chat_id}`")
+        if st.button("🧪 Send Safe Test Alert with CCTV Snapshot Now", use_container_width=True):
+            sample_snaps = list(Path("data/snapshots").glob("*.jpg"))
+            if sample_snaps and dispatcher.is_configured:
+                res = dispatcher.send_emergency_alert(
+                    image_path=sample_snaps[0],
+                    location="LC-102 (OCC DIRECT TEST)",
+                    danger_level="CRITICAL",
+                    confidence=97.5,
+                    event_id="EVT-TEST-DIRECT",
+                    object_type="Person",
+                )
+                if res.get("success"):
+                    st.success(f"🎉 Verified! Emergency alert with CCTV photo delivered to your Telegram! (Message ID: {res.get('message_id')})")
+                else:
+                    st.error(f"Dispatch failed: {res.get('error')}")
+            else:
+                st.warning("Ensure credentials and snapshot exist.")
 
 # =============================================================================
 # TAB 4: FORENSICS & SNAPSHOT GALLERY

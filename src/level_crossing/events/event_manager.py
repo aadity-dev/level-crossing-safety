@@ -71,6 +71,7 @@ class EventManager:
                         crossing_state=crossing_state,
                         timestamp=timestamp,
                         bbox=scene_state.bbox,
+                        confidence=getattr(scene_state, "confidence", 0.0),
                     )
                     self.active_events[tid] = event
                     logger.info(
@@ -86,6 +87,7 @@ class EventManager:
                         zone_type=scene_state.zone_type or existing_event.zone_type,
                         timestamp=timestamp,
                         bbox=scene_state.bbox,
+                        confidence=getattr(scene_state, "confidence", 0.0),
                     )
                     if severity_increased:
                         self._pending_escalation[tid] = True

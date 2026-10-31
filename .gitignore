@@ -39,6 +39,11 @@ htmlcov/
 *.swp
 *.swo
 
+# Environment variables & secrets
+.env
+*.env
+.env.*
+
 # Large files & local outputs
 *.pt
 *.onnx
