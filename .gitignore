@@ -43,6 +43,11 @@ htmlcov/
 .env
 *.env
 .env.*
+!.env.example
+
+# Web Frontend artifacts
+web/node_modules/
+web/dist/
 
 # Large files & local outputs
 *.pt

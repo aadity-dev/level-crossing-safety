@@ -1,0 +1,22 @@
+services:
+  railway-occ:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: railway_safety_occ
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - CROSSING_LOCATION=${CROSSING_LOCATION:-LC-102}
+      - OCC_ADMIN_PIN=${OCC_ADMIN_PIN:-123456}
+    volumes:
+      - ./data:/app/data
+      - ./configs:/app/configs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

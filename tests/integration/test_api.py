@@ -94,3 +94,18 @@ def test_events_and_alerts_endpoints(client):
     assert res_alerts.status_code == 200
     alerts_list = res_alerts.json()
     assert len(alerts_list) >= 1
+
+    # Query system overview
+    res_overview = client.get("/api/v1/system/overview")
+    assert res_overview.status_code == 200
+    overview = res_overview.json()
+    assert "system_status" in overview
+    assert "active_cameras" in overview
+    assert overview["total_events"] >= 1
+
+    # Query telegram status
+    res_tg = client.get("/api/v1/telegram/status")
+    assert res_tg.status_code == 200
+    tg_data = res_tg.json()
+    assert "configured" in tg_data
+    assert "bot_username" in tg_data

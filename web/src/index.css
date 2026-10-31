@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #0B0D10;
+    color: #F5F7FA;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+}
+
+/* Custom Industrial Railway Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B0D10;
+}
+::-webkit-scrollbar-thumb {
+  background: #252B33;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3B4654;
+}
+
+/* Subtle Glow Effects for Mission-Control Elements */
+.glow-critical {
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.25);
+}
+.glow-operational {
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.25);
+}
+.glow-cyan {
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.25);
+}
