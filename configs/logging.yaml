@@ -1,0 +1,5 @@
+version: "3.1.0"
+level: "INFO"
+as_json: false
+log_dir: "logs"
+audit_to_db: true

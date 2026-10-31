@@ -1,0 +1,51 @@
+version: "3.1.0"
+coordinate_space: "normalized"  # Coordinates are normalized [0.0, 1.0] relative to frame width and height
+
+zones:
+  - id: "zone_danger_track"
+    name: "Railway Danger Zone"
+    zone_type: "DANGER_TRACK"
+    description: "Active railway tracks and 2-meter clearance buffer. Immediate collision hazard."
+    polygon:
+      - [0.15, 0.40]
+      - [0.85, 0.40]
+      - [0.90, 0.65]
+      - [0.10, 0.65]
+    color_rgb: [220, 38, 38]   # Red
+    criticality: 1
+
+  - id: "zone_pedestrian_crossing"
+    name: "Designated Pedestrian Crossing Path"
+    zone_type: "PEDESTRIAN_CROSSING"
+    description: "Footpath across railway line for pedestrians and dismounted cyclists."
+    polygon:
+      - [0.40, 0.35]
+      - [0.60, 0.35]
+      - [0.62, 0.70]
+      - [0.38, 0.70]
+    color_rgb: [234, 179, 8]   # Yellow
+    criticality: 2
+
+  - id: "zone_island"
+    name: "Refuge Island / Median"
+    zone_type: "ISLAND"
+    description: "Pedestrian safety refuge island between parallel tracks or traffic lanes."
+    polygon:
+      - [0.42, 0.48]
+      - [0.58, 0.48]
+      - [0.58, 0.55]
+      - [0.42, 0.55]
+    color_rgb: [59, 130, 246]  # Blue
+    criticality: 3
+
+  - id: "zone_approach_road"
+    name: "Roadway Vehicle Approach"
+    zone_type: "APPROACH_ROAD"
+    description: "Roadway approach lanes before crossing barrier line."
+    polygon:
+      - [0.20, 0.05]
+      - [0.80, 0.05]
+      - [0.85, 0.38]
+      - [0.15, 0.38]
+    color_rgb: [16, 185, 129]  # Green
+    criticality: 4

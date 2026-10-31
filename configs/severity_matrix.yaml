@@ -1,0 +1,353 @@
+version: "3.1.0"
+specification: "V3.1 Master Implementation Specification"
+fallback_severity: "HIGH"  # Applied when unknown combination encountered at runtime
+log_missing_rule_fallback: true
+
+rules:
+  # ==========================================
+  # STATE: OPEN
+  # ==========================================
+  # OPEN - DANGER_TRACK
+  - crossing_state: "OPEN"
+    zone_type: "DANGER_TRACK"
+    rule_class: "person"
+    severity: "MEDIUM"
+
+  - crossing_state: "OPEN"
+    zone_type: "DANGER_TRACK"
+    rule_class: "vehicle"
+    severity: "HIGH"
+
+  - crossing_state: "OPEN"
+    zone_type: "DANGER_TRACK"
+    rule_class: "bicycle"
+    severity: "MEDIUM"
+
+  - crossing_state: "OPEN"
+    zone_type: "DANGER_TRACK"
+    rule_class: "train"
+    severity: "IGNORE"
+
+  # OPEN - PEDESTRIAN_CROSSING
+  - crossing_state: "OPEN"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "person"
+    severity: "LOW"
+
+  - crossing_state: "OPEN"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "vehicle"
+    severity: "MEDIUM"
+
+  - crossing_state: "OPEN"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "bicycle"
+    severity: "LOW"
+
+  - crossing_state: "OPEN"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "train"
+    severity: "IGNORE"
+
+  # OPEN - ISLAND
+  - crossing_state: "OPEN"
+    zone_type: "ISLAND"
+    rule_class: "person"
+    severity: "LOW"
+
+  - crossing_state: "OPEN"
+    zone_type: "ISLAND"
+    rule_class: "vehicle"
+    severity: "HIGH"
+
+  - crossing_state: "OPEN"
+    zone_type: "ISLAND"
+    rule_class: "bicycle"
+    severity: "LOW"
+
+  - crossing_state: "OPEN"
+    zone_type: "ISLAND"
+    rule_class: "train"
+    severity: "IGNORE"
+
+  # OPEN - APPROACH_ROAD
+  - crossing_state: "OPEN"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "person"
+    severity: "LOW"
+
+  - crossing_state: "OPEN"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "vehicle"
+    severity: "LOW"
+
+  - crossing_state: "OPEN"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "bicycle"
+    severity: "LOW"
+
+  - crossing_state: "OPEN"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "train"
+    severity: "IGNORE"
+
+  # ==========================================
+  # STATE: TRAIN_APPROACHING
+  # ==========================================
+  # TRAIN_APPROACHING - DANGER_TRACK
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "DANGER_TRACK"
+    rule_class: "person"
+    severity: "CRITICAL"
+
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "DANGER_TRACK"
+    rule_class: "vehicle"
+    severity: "CRITICAL"
+
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "DANGER_TRACK"
+    rule_class: "bicycle"
+    severity: "CRITICAL"
+
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "DANGER_TRACK"
+    rule_class: "train"
+    severity: "IGNORE"
+
+  # TRAIN_APPROACHING - PEDESTRIAN_CROSSING
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "person"
+    severity: "CRITICAL"
+
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "vehicle"
+    severity: "CRITICAL"
+
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "bicycle"
+    severity: "CRITICAL"
+
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "train"
+    severity: "IGNORE"
+
+  # TRAIN_APPROACHING - ISLAND
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "ISLAND"
+    rule_class: "person"
+    severity: "HIGH"
+
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "ISLAND"
+    rule_class: "vehicle"
+    severity: "CRITICAL"
+
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "ISLAND"
+    rule_class: "bicycle"
+    severity: "HIGH"
+
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "ISLAND"
+    rule_class: "train"
+    severity: "IGNORE"
+
+  # TRAIN_APPROACHING - APPROACH_ROAD
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "person"
+    severity: "MEDIUM"
+
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "vehicle"
+    severity: "MEDIUM"
+
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "bicycle"
+    severity: "MEDIUM"
+
+  - crossing_state: "TRAIN_APPROACHING"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "train"
+    severity: "IGNORE"
+
+  # ==========================================
+  # STATE: TRAIN_PASSING
+  # ==========================================
+  # TRAIN_PASSING - DANGER_TRACK
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "DANGER_TRACK"
+    rule_class: "person"
+    severity: "CRITICAL"
+
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "DANGER_TRACK"
+    rule_class: "vehicle"
+    severity: "CRITICAL"
+
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "DANGER_TRACK"
+    rule_class: "bicycle"
+    severity: "CRITICAL"
+
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "DANGER_TRACK"
+    rule_class: "train"
+    severity: "IGNORE"
+
+  # TRAIN_PASSING - PEDESTRIAN_CROSSING
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "person"
+    severity: "CRITICAL"
+
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "vehicle"
+    severity: "CRITICAL"
+
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "bicycle"
+    severity: "CRITICAL"
+
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "train"
+    severity: "IGNORE"
+
+  # TRAIN_PASSING - ISLAND
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "ISLAND"
+    rule_class: "person"
+    severity: "HIGH"
+
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "ISLAND"
+    rule_class: "vehicle"
+    severity: "CRITICAL"
+
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "ISLAND"
+    rule_class: "bicycle"
+    severity: "HIGH"
+
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "ISLAND"
+    rule_class: "train"
+    severity: "IGNORE"
+
+  # TRAIN_PASSING - APPROACH_ROAD
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "person"
+    severity: "HIGH"
+
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "vehicle"
+    severity: "HIGH"
+
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "bicycle"
+    severity: "HIGH"
+
+  - crossing_state: "TRAIN_PASSING"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "train"
+    severity: "IGNORE"
+
+  # ==========================================
+  # STATE: UNKNOWN (Degraded Mode Fallback)
+  # ==========================================
+  # UNKNOWN - DANGER_TRACK
+  - crossing_state: "UNKNOWN"
+    zone_type: "DANGER_TRACK"
+    rule_class: "person"
+    severity: "CRITICAL"
+
+  - crossing_state: "UNKNOWN"
+    zone_type: "DANGER_TRACK"
+    rule_class: "vehicle"
+    severity: "CRITICAL"
+
+  - crossing_state: "UNKNOWN"
+    zone_type: "DANGER_TRACK"
+    rule_class: "bicycle"
+    severity: "CRITICAL"
+
+  - crossing_state: "UNKNOWN"
+    zone_type: "DANGER_TRACK"
+    rule_class: "train"
+    severity: "IGNORE"
+
+  # UNKNOWN - PEDESTRIAN_CROSSING
+  - crossing_state: "UNKNOWN"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "person"
+    severity: "HIGH"
+
+  - crossing_state: "UNKNOWN"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "vehicle"
+    severity: "HIGH"
+
+  - crossing_state: "UNKNOWN"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "bicycle"
+    severity: "HIGH"
+
+  - crossing_state: "UNKNOWN"
+    zone_type: "PEDESTRIAN_CROSSING"
+    rule_class: "train"
+    severity: "IGNORE"
+
+  # UNKNOWN - ISLAND
+  - crossing_state: "UNKNOWN"
+    zone_type: "ISLAND"
+    rule_class: "person"
+    severity: "HIGH"
+
+  - crossing_state: "UNKNOWN"
+    zone_type: "ISLAND"
+    rule_class: "vehicle"
+    severity: "HIGH"
+
+  - crossing_state: "UNKNOWN"
+    zone_type: "ISLAND"
+    rule_class: "bicycle"
+    severity: "HIGH"
+
+  - crossing_state: "UNKNOWN"
+    zone_type: "ISLAND"
+    rule_class: "train"
+    severity: "IGNORE"
+
+  # UNKNOWN - APPROACH_ROAD
+  - crossing_state: "UNKNOWN"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "person"
+    severity: "MEDIUM"
+
+  - crossing_state: "UNKNOWN"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "vehicle"
+    severity: "MEDIUM"
+
+  - crossing_state: "UNKNOWN"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "bicycle"
+    severity: "MEDIUM"
+
+  - crossing_state: "UNKNOWN"
+    zone_type: "APPROACH_ROAD"
+    rule_class: "train"
+    severity: "IGNORE"

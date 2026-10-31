@@ -1,0 +1,51 @@
+# Virtual Environments
+.venv/
+.venv-py39-backup/
+env/
+venv/
+
+# Python cache & artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing & Type checking
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# OS and Editor artifacts
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Large files & local outputs
+*.pt
+*.onnx
+runs/
+data/public/
+data/cache/
+*.sqlite3
+*.sqlite3-journal
+data/snapshots/
+data/controlled/validation/annotated_*.mp4

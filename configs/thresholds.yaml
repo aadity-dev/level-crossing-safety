@@ -1,0 +1,43 @@
+version: "3.1.0"
+
+detection:
+  confidence_thresholds:
+    person: 0.35
+    vehicle: 0.40
+    bicycle: 0.35
+    train: 0.45
+    default: 0.35
+  iou_nms_threshold: 0.45
+  model_weights: "yolov8n.pt"
+  input_resolution: [640, 640]
+  device: "mps"  # mps for Apple Silicon M2, fallback to cpu
+
+tracking:
+  iou_threshold: 0.30
+  max_lost_frames: 30       # Track-loss grace period (~1.0s at 30fps)
+  min_hits: 3               # Detections required to confirm track
+  distance_metric: "iou"
+
+scene_state:
+  reference_point: "bottom_center"  # Bottom center of bounding box
+  boundary_hysteresis_pixels: 8.0
+  boundary_hysteresis_normalized: 0.015
+  velocity_smoothing_alpha: 0.3
+
+event_manager:
+  # Timers in seconds
+  confirmation_dwell_seconds:
+    DANGER_TRACK: 0.8
+    PEDESTRIAN_CROSSING: 2.0
+    ISLAND: 2.5
+    APPROACH_ROAD: 3.0
+    default: 1.5
+
+  escalation_seconds: 3.0   # Unsafe persistence before HIGH -> CRITICAL
+  cooldown_seconds: 5.0     # Alert cooldown interval for repeated alerts on same track
+  track_lost_timeout_seconds: 2.0  # Time after which a lost track event is closed
+
+train_suppression:
+  enabled: true
+  overlap_iou_threshold: 0.25   # If truck/bus overlaps train by > 0.25, suppress as train car
+  area_ratio_threshold: 0.35    # If bbox area > 35% of frame during approaching/passing, flag as train
