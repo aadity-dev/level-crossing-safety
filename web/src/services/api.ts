@@ -207,6 +207,68 @@ export const api = {
     return res.json();
   },
 
+  async uploadCustomVideo(file: File): Promise<{ success: boolean; filename: string; path: string; size_mb: number; stream_url: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_BASE}/videos/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
+      throw new Error(err.detail || 'Upload failed');
+    }
+    return res.json();
+  },
+
+  async resolveVideoLink(url: string): Promise<{ success: boolean; resolved_path: string; filename: string; is_stream: boolean; stream_url: string; error?: string }> {
+    const res = await fetch(`${API_BASE}/videos/resolve-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed to resolve URL' }));
+      throw new Error(err.detail || 'Resolution failed');
+    }
+    return res.json();
+  },
+
+  async executeInference(params: {
+    video_source: string;
+    crossing_state: string;
+    max_frames: number | null;
+    autonomous_train: boolean;
+    enable_telegram: boolean;
+  }): Promise<{
+    success: boolean;
+    total_frames_processed: number;
+    duration_seconds: number;
+    events_generated: number;
+    alerts_generated: number;
+    highest_severity_observed: string;
+    average_fps: number;
+    elapsed_wall_time_sec: number;
+    annotated_video_url: string;
+    heatmap_url?: string;
+    heatmap_analytics?: {
+      danger_zone_percentage: number;
+      total_foot_samples: number;
+      peak_hotspot_coordinate: { x: number; y: number };
+    };
+  }> {
+    const res = await fetch(`${API_BASE}/videos/execute-inference`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Inference failed' }));
+      throw new Error(err.detail || 'Inference execution failed');
+    }
+    return res.json();
+  },
+
   async runScenarioReplay(videoPath: string, maxFrames = 300, enableTelegram = true): Promise<any> {
     const res = await fetch(`${API_BASE}/videos/run-replay`, {
       method: 'POST',
