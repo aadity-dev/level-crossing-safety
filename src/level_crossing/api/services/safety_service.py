@@ -22,6 +22,11 @@ class SafetyService:
     def set_crossing_state(self, state: CrossingState) -> None:
         self.current_crossing_state = state
 
+    @property
+    def crossing_state(self) -> CrossingState:
+        """Alias property for current_crossing_state."""
+        return self.current_crossing_state
+
     def check_health(self) -> Dict[str, Any]:
         """Evaluates system health. UNKNOWN crossing state immediately sets health to DEGRADED."""
         db_ok = False
