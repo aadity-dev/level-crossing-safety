@@ -17,12 +17,13 @@ logger = get_logger("api")
 def create_app(config_dir: str = "configs", db_path: str = "data/level_crossing.sqlite3") -> FastAPI:
     """Creates and configures the FastAPI application instance."""
 
+    db_manager = DatabaseManager(db_path=db_path)
+    safety_service = SafetyService(db_manager=db_manager)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # Startup
         logger.info("Initializing Level Crossing Safety System API...")
-        db_manager = DatabaseManager(db_path=db_path)
-        safety_service = SafetyService(db_manager=db_manager)
         app.state.db_manager = db_manager
         app.state.safety_service = safety_service
         logger.info("API initialized and operational.")
@@ -36,6 +37,10 @@ def create_app(config_dir: str = "configs", db_path: str = "data/level_crossing.
         description="Edge vision safety monitoring, intruder alerting, and telemetry API",
         lifespan=lifespan,
     )
+
+    # Initialize app.state immediately
+    app.state.db_manager = db_manager
+    app.state.safety_service = safety_service
 
     app.add_middleware(
         CORSMiddleware,
