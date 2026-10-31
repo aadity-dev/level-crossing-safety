@@ -122,6 +122,26 @@ class AlertNotifier:
         return record
 
     @classmethod
+    def fetch_latest_chat_id(cls, bot_token: str) -> Optional[int]:
+        """Fetches the numeric chat ID of the user who sent /start to the bot via getUpdates."""
+        import requests
+
+        try:
+            url = f"https://api.telegram.org/bot{bot_token.strip()}/getUpdates"
+            resp = requests.get(url, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                results = data.get("result", [])
+                if results:
+                    for update in reversed(results):
+                        msg = update.get("message") or update.get("my_chat_member")
+                        if msg and "chat" in msg:
+                            return msg["chat"]["id"]
+        except Exception as e:
+            logger.warning(f"Failed to auto-detect Telegram chat ID: {e}")
+        return None
+
+    @classmethod
     def format_telegram_alert_text(
         cls,
         alert_id: str,

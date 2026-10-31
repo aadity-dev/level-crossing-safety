@@ -747,11 +747,37 @@ with tab_alerts:
                 """,
                 unsafe_allow_html=True,
             )
-            cfg_c1, cfg_c2 = st.columns(2)
+            cfg_c1, cfg_c2 = st.columns([1.2, 1])
             with cfg_c1:
-                live_bot_token = st.text_input("Telegram Bot Token", value="", type="password", placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ")
+                live_bot_token = st.text_input(
+                    "Telegram Bot Token",
+                    value=st.session_state.get("tg_bot_token", ""),
+                    type="password",
+                    placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ",
+                    key="input_tg_bot_token",
+                )
             with cfg_c2:
-                live_chat_id = st.text_input("Telegram Chat ID", value="", placeholder="e.g. 1234567890")
+                auto_cid = st.session_state.get("tg_chat_id", "")
+                live_chat_id = st.text_input(
+                    "Telegram Chat ID",
+                    value=auto_cid,
+                    placeholder="e.g. 1234567890",
+                    key="input_tg_chat_id",
+                )
+
+            if st.button("🔍 Auto-Detect My Chat ID (After tapping /start on your bot)", use_container_width=True):
+                if not live_bot_token.strip():
+                    st.error("Please paste your Telegram Bot Token above first.")
+                else:
+                    cid = AlertNotifier.fetch_latest_chat_id(live_bot_token.strip())
+                    if cid:
+                        st.session_state["tg_chat_id"] = str(cid)
+                        st.session_state["tg_bot_token"] = live_bot_token.strip()
+                        st.success(f"✅ Found your Chat ID: `{cid}`! Auto-filled successfully.")
+                        st.rerun()
+                    else:
+                        st.warning("No message detected yet. Make sure you opened your bot and sent /start!")
+
             live_webhook = st.text_input("Custom REST Webhook URL (Optional)", value="", placeholder="e.g. https://webhook.site/your-custom-uuid")
 
         mob_c1, mob_c2 = st.columns([1.6, 1])
