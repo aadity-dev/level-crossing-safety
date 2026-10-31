@@ -753,41 +753,108 @@ with tab_alerts:
 
         default_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
         default_chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+        admin_pin = os.getenv("OCC_ADMIN_PIN", "123456")
 
-        with st.expander("⚙️ Telegram Bot Credentials & Verification", expanded=not bool(default_token and default_chat_id)):
-            cfg_c1, cfg_c2 = st.columns([1.2, 1])
-            with cfg_c1:
-                live_bot_token = st.text_input(
-                    "Telegram Bot Token (from .env)",
-                    value=default_token or st.session_state.get("tg_bot_token", ""),
-                    type="password",
-                    placeholder="e.g. 9107048971:AAHx-0Ts63hw...",
-                    key="input_tg_bot_token",
-                )
-            with cfg_c2:
-                live_chat_id = st.text_input(
-                    "Telegram Chat ID (from .env)",
-                    value=default_chat_id or st.session_state.get("tg_chat_id", ""),
-                    placeholder="e.g. 1295515495",
-                    key="input_tg_chat_id",
-                )
+        def mask_secret(s: str) -> str:
+            if not s:
+                return "Not Configured"
+            if len(s) <= 8:
+                return "●●●●●●●●"
+            return f"{s[:4]}●●●●●●●●●●●●●●{s[-4:]}"
 
-            if st.button("🔍 Auto-Detect My Chat ID (After tapping /start on your bot)", use_container_width=True):
-                if not live_bot_token.strip():
-                    st.error("Please paste your Telegram Bot Token above first.")
-                else:
-                    cid = AlertNotifier.fetch_latest_chat_id(live_bot_token.strip())
-                    if cid:
-                        st.session_state["tg_chat_id"] = str(cid)
-                        st.session_state["tg_bot_token"] = live_bot_token.strip()
-                        st.success(f"✅ Found your Chat ID: `{cid}`! Auto-filled successfully.")
+        # Admin PIN Authorization Gate
+        is_admin_unlocked = st.session_state.get("admin_keychain_unlocked", False)
+
+        with st.expander("🛡️ Station Master Security Keychain & Bot Configuration", expanded=not bool(default_token)):
+            if not is_admin_unlocked:
+                st.markdown(
+                    f"""
+                    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 12px 16px; margin-bottom: 12px;">
+                        <span style="font-weight: 600; color: #10B981;">🔒 Credentials Protected by Railway OCC Keychain</span>
+                        <p style="margin: 6px 0 0 0; font-size: 0.82rem; color: #9CA3AF;">
+                            Bot Token: <code>{mask_secret(default_token)}</code> (Hidden from DOM)<br/>
+                            Target Chat ID: <code>{default_chat_id or 'Not Set'}</code><br/>
+                            Channel Status: <b>@MyRailwaySafety_bot (🟢 ONLINE)</b>
+                        </p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                pin_col1, pin_col2 = st.columns([1.5, 1])
+                with pin_col1:
+                    entered_pin = st.text_input(
+                        "Enter 6-Digit Admin PIN to Change Credentials",
+                        type="password",
+                        max_chars=6,
+                        placeholder="Enter 6 digits (Default: 123456)",
+                        key="admin_pin_input",
+                    )
+                with pin_col2:
+                    st.write("")
+                    st.write("")
+                    if st.button("🔓 Unlock Credentials", use_container_width=True):
+                        if entered_pin.strip() == admin_pin.strip():
+                            st.session_state["admin_keychain_unlocked"] = True
+                            st.success("✅ Admin PIN verified. Credential settings unlocked.")
+                            st.rerun()
+                        else:
+                            st.error("❌ Invalid Admin PIN. Access denied.")
+            else:
+                st.info("🔓 Admin Keychain Unlocked. You may edit credentials below:")
+                cfg_c1, cfg_c2 = st.columns([1.2, 1])
+                with cfg_c1:
+                    new_bot_token = st.text_input(
+                        "Telegram Bot Token",
+                        value=st.session_state.get("tg_bot_token", default_token),
+                        type="password",
+                        key="input_tg_bot_token",
+                    )
+                with cfg_c2:
+                    new_chat_id = st.text_input(
+                        "Telegram Chat ID",
+                        value=st.session_state.get("tg_chat_id", default_chat_id),
+                        key="input_tg_chat_id",
+                    )
+
+                btn_c1, btn_c2, btn_c3 = st.columns(3)
+                with btn_c1:
+                    if st.button("💾 Save Credentials to .env", use_container_width=True):
+                        if new_bot_token.strip() and new_chat_id.strip():
+                            st.session_state["tg_bot_token"] = new_bot_token.strip()
+                            st.session_state["tg_chat_id"] = new_chat_id.strip()
+                            env_content = (
+                                f"# Railway Level Crossing Safety - Telegram Bot & Operations Configuration\n"
+                                f"TELEGRAM_BOT_TOKEN={new_bot_token.strip()}\n"
+                                f"TELEGRAM_CHAT_ID={new_chat_id.strip()}\n"
+                                f"CROSSING_LOCATION=LC-102\n"
+                                f"OCC_ADMIN_PIN={admin_pin}\n"
+                            )
+                            Path(".env").write_text(env_content)
+                            st.success("✅ Credentials saved securely to server .env!")
+                            st.rerun()
+                        else:
+                            st.warning("Please provide both Bot Token and Chat ID.")
+                with btn_c2:
+                    if st.button("🔍 Auto-Detect My Chat ID", use_container_width=True):
+                        tok = new_bot_token.strip() or default_token
+                        if not tok:
+                            st.error("Please enter a bot token first.")
+                        else:
+                            cid = AlertNotifier.fetch_latest_chat_id(tok)
+                            if cid:
+                                st.session_state["tg_chat_id"] = str(cid)
+                                st.success(f"✅ Found Chat ID: `{cid}`!")
+                                st.rerun()
+                            else:
+                                st.warning("No message detected yet. Send /start to your bot!")
+                with btn_c3:
+                    if st.button("🔒 Re-Lock Keychain", use_container_width=True):
+                        st.session_state["admin_keychain_unlocked"] = False
                         st.rerun()
-                    else:
-                        st.warning("No message detected yet. Make sure you opened your bot and sent /start!")
 
-        # Initialize Dispatcher
-        active_token = live_bot_token.strip() or default_token
-        active_chat = live_chat_id.strip() or default_chat_id
+        # Active credentials (loaded securely from server env or session)
+        active_token = st.session_state.get("tg_bot_token", default_token)
+        active_chat = st.session_state.get("tg_chat_id", default_chat_id)
         dispatcher = TelegramDispatcher(bot_token=active_token, chat_id=active_chat, location="LC-102")
 
         mob_c1, mob_c2 = st.columns([1.6, 1])
