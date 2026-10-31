@@ -45,8 +45,22 @@ def create_app(config_dir: str = "configs", db_path: str = "data/level_crossing.
         allow_headers=["*"],
     )
 
-    # Register API routers
+    # Root endpoint for discovery and probes
+    @app.get("/", tags=["Root"])
+    def get_root():
+        return {
+            "system": "Level Crossing Safety Monitoring System API",
+            "version": "3.1.0",
+            "docs_url": "/docs",
+            "health_url": "/health",
+            "api_v1_prefix": "/api/v1",
+        }
+
+    # Register Health router at both root (/health) and versioned (/api/v1/health)
+    app.include_router(health.router)
     app.include_router(health.router, prefix="/api/v1")
+
+    # Register API v1 resource routers
     app.include_router(events.router, prefix="/api/v1")
     app.include_router(alerts.router, prefix="/api/v1")
     app.include_router(videos.router, prefix="/api/v1")

@@ -20,11 +20,22 @@ def client(tmp_path: Path):
 
 
 def test_health_normal_mode(client):
+    # Test versioned endpoint
     res = client.get("/api/v1/health")
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == HealthStatus.HEALTHY.value
     assert data["database_connected"] is True
+
+    # Test root-level /health endpoint
+    res_root = client.get("/health")
+    assert res_root.status_code == 200
+    assert res_root.json()["status"] == HealthStatus.HEALTHY.value
+
+    # Test root discovery / endpoint
+    res_index = client.get("/")
+    assert res_index.status_code == 200
+    assert res_index.json()["health_url"] == "/health"
 
 
 def test_health_unknown_state_degrades(client):
