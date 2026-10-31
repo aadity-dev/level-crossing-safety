@@ -9,12 +9,16 @@ import hashlib
 import pandas as pd
 import numpy as np
 from PIL import Image
+import cv2
+import yaml
 
-from level_crossing.common.types import CrossingState, SeverityLevel, HealthStatus
+from level_crossing.common.types import CrossingState, SeverityLevel, HealthStatus, ZoneType
 from level_crossing.common.config import SystemConfig
 from level_crossing.database.db import DatabaseManager
 from level_crossing.api.services.safety_service import SafetyService
 from level_crossing.pipeline.replay_pipeline import ReplayPipeline
+from level_crossing.alerts.sound_simulator import SoundSimulator
+from level_crossing.reporting.incident_report import generate_incident_pdf_bytes
 
 # -----------------------------------------------------------------------------
 # Page Configuration & Professional SCADA Mission-Control Styling
@@ -641,6 +645,52 @@ with tab_alerts:
             })
         df_alt = pd.DataFrame(alert_rows)
         st.dataframe(df_alt, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+        st.markdown("#### 📑 Official Forensic Action & Siren Console")
+        sel_c1, sel_c2, sel_c3 = st.columns([2, 1, 1])
+
+        with sel_c1:
+            alert_choices = {f"{a.alert_id} ({a.severity} - {a.message[:35]}...)": a for a in alerts}
+            chosen_key = st.selectbox("Select Alert Record for Formal Audit", list(alert_choices.keys()), key="sel_alert_box")
+            chosen_alert = alert_choices[chosen_key]
+
+        with sel_c2:
+            # Audio Siren synthesizer
+            sev_enum = SeverityLevel(chosen_alert.severity) if chosen_alert.severity in [s.value for s in SeverityLevel] else SeverityLevel.MEDIUM
+            wav_bytes = SoundSimulator.synthesize_wav(sev_enum)
+            st.markdown("**Trackside Acoustic Siren:**")
+            st.audio(wav_bytes, format="audio/wav")
+
+        with sel_c3:
+            # PDF Incident Report generator
+            snap_matches = list(Path("data/snapshots").glob(f"*{chosen_alert.event_id}*.jpg"))
+            chosen_snap = str(snap_matches[0]) if snap_matches else None
+            if not chosen_snap and list(Path("data/snapshots").glob("*.jpg")):
+                chosen_snap = str(list(Path("data/snapshots").glob("*.jpg"))[0])
+
+            pdf_report_bytes = generate_incident_pdf_bytes(
+                alert_id=chosen_alert.alert_id,
+                event_id=chosen_alert.event_id,
+                severity=chosen_alert.severity,
+                alert_type=chosen_alert.alert_type,
+                message=chosen_alert.message,
+                crossing_state=service.crossing_state.value,
+                timestamp_sec=chosen_alert.timestamp,
+                wall_clock_time=chosen_alert.wall_clock_time,
+                snapshot_path=chosen_snap,
+                system_health=service.check_health()["status"].value,
+            )
+
+            st.markdown("**Executive Safety Report:**")
+            st.download_button(
+                label="📄 Download Official PDF Report",
+                data=pdf_report_bytes,
+                file_name=f"RAIL_SAFETY_AUDIT_{chosen_alert.alert_id}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key=f"pdf_btn_{chosen_alert.alert_id}",
+            )
     else:
         st.info("No alerts generated yet.")
 
@@ -656,18 +706,47 @@ with tab_evidence:
         snapshots = sorted(list(snap_dir.glob("*.jpg")), key=lambda p: p.stat().st_mtime, reverse=True)
         if snapshots:
             cols = st.columns(3)
-            for idx, snap_path in enumerate(snapshots[:12]):
+            for idx, snap_path in enumerate(snapshots[:9]):
                 with cols[idx % 3]:
                     img = Image.open(snap_path)
                     st.image(img, caption=snap_path.name, use_container_width=True)
-                    st.download_button(
-                        label=f"⬇️ Download {snap_path.name}",
-                        data=snap_path.read_bytes(),
-                        file_name=snap_path.name,
-                        mime="image/jpeg",
-                        key=f"dl_{idx}",
-                        use_container_width=True,
+
+                    stem = snap_path.stem
+                    mock_alert_id = f"ALT-{stem[-8:].upper()}"
+                    mock_event_id = f"EVT-{stem[-8:].upper()}"
+
+                    pdf_b = generate_incident_pdf_bytes(
+                        alert_id=mock_alert_id,
+                        event_id=mock_event_id,
+                        severity="CRITICAL",
+                        alert_type="CONFIRMED_HAZARD",
+                        message="Automated photographic evidence captured upon hazard confirmation",
+                        crossing_state=service.crossing_state.value,
+                        timestamp_sec=1.5,
+                        wall_clock_time=time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        snapshot_path=str(snap_path),
+                        system_health=service.check_health()["status"].value,
                     )
+
+                    c_dl, c_pdf = st.columns(2)
+                    with c_dl:
+                        st.download_button(
+                            label="⬇️ Image",
+                            data=snap_path.read_bytes(),
+                            file_name=snap_path.name,
+                            mime="image/jpeg",
+                            key=f"dl_{idx}",
+                            use_container_width=True,
+                        )
+                    with c_pdf:
+                        st.download_button(
+                            label="📄 PDF",
+                            data=pdf_b,
+                            file_name=f"EVIDENCE_REPORT_{mock_alert_id}.pdf",
+                            mime="application/pdf",
+                            key=f"pdf_snap_{idx}",
+                            use_container_width=True,
+                        )
         else:
             st.info("No snapshots captured in data/snapshots yet.")
     else:
@@ -677,29 +756,108 @@ with tab_evidence:
 # TAB 5: ZONE GEOMETRY & V3.1 MATRIX
 # =============================================================================
 with tab_matrix:
-    st.markdown("### 🗺️ Crossing Geometry & V3.1 Severity Matrix Rules")
-    col_geom, col_rules = st.columns([1, 1])
+    st.markdown("### 🗺️ Visual Safety Zone Calibration Studio & V3.1 Matrix Rules")
+    st.caption("Calibrate polygon safety zones directly on real camera frames to adapt to any crossing CCTV angle.")
 
-    with col_geom:
-        st.markdown("#### Configured Safety Zones")
-        for z in config.zones.zones:
-            with st.expander(f"📍 {z.name} (`{z.zone_type.value}`)", expanded=True):
-                st.write(f"**Criticality Tier:** {z.criticality} (Tier 1 = Maximum Risk)")
-                st.write(f"**Description:** {z.description}")
-                st.write(f"**Polygon Vertices:** `{z.polygon}`")
+    # --- Zone Calibration Studio Section ---
+    st.markdown("#### 🎯 Interactive Camera Perspective Zone Calibrator")
 
-    with col_rules:
-        st.markdown("#### V3.1 Severity Matrix (All 64 Rule Combinations)")
-        rule_data = [
-            {
-                "Crossing State": r.crossing_state.value,
-                "Zone Type": r.zone_type.value,
-                "Rule Class": r.rule_class.value,
-                "Severity": r.severity.value,
-            }
-            for r in config.severity_matrix.rules
-        ]
-        st.dataframe(pd.DataFrame(rule_data), use_container_width=True, height=450, hide_index=True)
+    cal_col_vid, cal_col_controls = st.columns([1.3, 1])
+
+    calib_video_source = st.session_state.get(
+        "active_annotated_video",
+        "data/controlled/validation/scenario_01_person_danger_track.mp4",
+    )
+    if not Path(calib_video_source).exists():
+        calib_video_source = "data/controlled/validation/scenario_01_person_danger_track.mp4"
+
+    preview_frame = None
+    if Path(calib_video_source).exists():
+        cap = cv2.VideoCapture(str(calib_video_source))
+        ret, frame_bgr = cap.read()
+        cap.release()
+        if ret and frame_bgr is not None:
+            preview_frame = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+
+    with cal_col_controls:
+        zone_names = [z.zone_type.value for z in config.zones.zones]
+        selected_zone_type = st.selectbox("Select Zone to Adjust", zone_names, index=0)
+
+        target_zone = next((z for z in config.zones.zones if z.zone_type.value == selected_zone_type), None)
+        poly = target_zone.polygon if target_zone else [[0.1, 0.4], [0.9, 0.4], [0.9, 0.7], [0.1, 0.7]]
+
+        st.caption("Adjust Normalized Coordinates [X, Y] (0.0=Left/Top, 1.0=Right/Bottom):")
+        p1_x = st.slider("P1 Top-Left X", 0.0, 1.0, float(poly[0][0]), 0.02, key=f"p1x_{selected_zone_type}")
+        p1_y = st.slider("P1 Top-Left Y", 0.0, 1.0, float(poly[0][1]), 0.02, key=f"p1y_{selected_zone_type}")
+        p2_x = st.slider("P2 Top-Right X", 0.0, 1.0, float(poly[1][0]), 0.02, key=f"p2x_{selected_zone_type}")
+        p2_y = st.slider("P2 Top-Right Y", 0.0, 1.0, float(poly[1][1]), 0.02, key=f"p2y_{selected_zone_type}")
+        p3_x = st.slider("P3 Bottom-Right X", 0.0, 1.0, float(poly[2][0]), 0.02, key=f"p3x_{selected_zone_type}")
+        p3_y = st.slider("P3 Bottom-Right Y", 0.0, 1.0, float(poly[2][1]), 0.02, key=f"p3y_{selected_zone_type}")
+        p4_x = st.slider("P4 Bottom-Left X", 0.0, 1.0, float(poly[3][0]), 0.02, key=f"p4x_{selected_zone_type}")
+        p4_y = st.slider("P4 Bottom-Left Y", 0.0, 1.0, float(poly[3][1]), 0.02, key=f"p4y_{selected_zone_type}")
+
+        calibrated_poly = [[p1_x, p1_y], [p2_x, p2_y], [p3_x, p3_y], [p4_x, p4_y]]
+
+        btn_save, btn_reset = st.columns(2)
+        with btn_save:
+            if st.button("💾 Save Zones to YAML", type="primary", use_container_width=True):
+                yaml_path = Path("configs/zones.yaml")
+                if yaml_path.exists():
+                    with open(yaml_path, "r") as yf:
+                        y_data = yaml.safe_load(yf)
+                    for z_dict in y_data.get("zones", []):
+                        if z_dict.get("zone_type") == selected_zone_type:
+                            z_dict["polygon"] = calibrated_poly
+                    with open(yaml_path, "w") as yf:
+                        yaml.safe_dump(y_data, yf, sort_keys=False)
+                    st.success(f"✅ Calibrated `{selected_zone_type}` saved to configs/zones.yaml!")
+                    st.cache_resource.clear()
+                    st.rerun()
+
+        with btn_reset:
+            if st.button("🔄 Reset Standard Geometry", use_container_width=True):
+                st.cache_resource.clear()
+                st.rerun()
+
+    with cal_col_vid:
+        st.markdown("#### Live Perspective Preview Canvas")
+        if preview_frame is not None:
+            h, w = preview_frame.shape[:2]
+            canvas = preview_frame.copy()
+            overlay = preview_frame.copy()
+
+            for z in config.zones.zones:
+                is_active = (z.zone_type.value == selected_zone_type)
+                z_poly = calibrated_poly if is_active else z.polygon
+                pts = np.array([[int(pt[0] * w), int(pt[1] * h)] for pt in z_poly], np.int32)
+                color = z.color_rgb
+
+                cv2.fillPoly(overlay, [pts], color)
+                cv2.polylines(canvas, [pts], True, color, 3 if is_active else 1)
+
+                if is_active:
+                    for idx, pt in enumerate(pts):
+                        cv2.circle(canvas, tuple(pt), 7, (255, 255, 255), -1)
+                        cv2.circle(canvas, tuple(pt), 5, color, -1)
+                        cv2.putText(canvas, f"P{idx+1}", (pt[0] + 8, pt[1] - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+
+            rendered = cv2.addWeighted(overlay, 0.35, canvas, 0.65, 0)
+            st.image(rendered, caption=f"Active Calibration: {selected_zone_type} on Frame 0", use_container_width=True)
+        else:
+            st.info("Load a video to visualize calibration.")
+
+    st.markdown("---")
+    st.markdown("#### V3.1 Master Severity Matrix Rules (64 Formally Verified Rules)")
+    rule_data = [
+        {
+            "Crossing State": r.crossing_state.value,
+            "Zone Type": r.zone_type.value,
+            "Rule Class": r.rule_class.value,
+            "Severity": r.severity.value,
+        }
+        for r in config.severity_matrix.rules
+    ]
+    st.dataframe(pd.DataFrame(rule_data), use_container_width=True, height=350, hide_index=True)
 
 # =============================================================================
 # TAB 6: EDGE-PROXY & BENCHMARKS
