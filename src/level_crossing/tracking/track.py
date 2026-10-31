@@ -46,6 +46,11 @@ class Track:
         return max(0.0, self.last_seen_time - self.first_seen_time)
 
     @property
+    def is_confirmed(self) -> bool:
+        """Returns True if the track is in CONFIRMED state."""
+        return self.state == TrackState.CONFIRMED
+
+    @property
     def reference_point(self) -> Point2D:
         """Bottom-center reference point for ground-plane zone intersection."""
         return self.current_bbox.bottom_center

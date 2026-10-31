@@ -18,6 +18,7 @@ from level_crossing.database.db import DatabaseManager
 from level_crossing.api.services.safety_service import SafetyService
 from level_crossing.pipeline.replay_pipeline import ReplayPipeline
 from level_crossing.alerts.sound_simulator import SoundSimulator
+from level_crossing.alerts.notifier import AlertNotifier
 from level_crossing.reporting.incident_report import generate_incident_pdf_bytes
 
 # -----------------------------------------------------------------------------
@@ -481,6 +482,12 @@ with tab_replay:
         else:
             limit_frames = None
 
+        autonomous_train = st.checkbox(
+            "🚂 Autonomous Optical Train Sensing",
+            value=False,
+            help="For unmanned rural crossings: automatically detects approaching locomotives via perspective area expansion (dA/dt) and flips crossing state to TRAIN_APPROACHING without track circuits.",
+        )
+
         st.markdown(
             r"""
             <div style="background-color: #1F2937; border-left: 4px solid #06B6D4; padding: 10px 14px; border-radius: 4px; margin: 14px 0;">
@@ -522,10 +529,13 @@ with tab_replay:
                         crossing_state_timeline=lambda t: replay_state,
                         output_video_path=target_output_mp4,
                         max_frames=max_f,
+                        autonomous_train_sensing=autonomous_train,
                     )
                     progress_bar.progress(100, text=f"Replay complete in {summary.elapsed_wall_time_sec:.2f}s ({summary.average_fps:.1f} FPS)")
 
                     st.session_state["active_annotated_video"] = target_output_mp4
+                    st.session_state["active_heatmap_path"] = summary.heatmap_path
+                    st.session_state["active_heatmap_analytics"] = summary.heatmap_analytics
                     st.session_state["last_summary"] = {
                         "frames": summary.total_frames_processed,
                         "fps": summary.average_fps,
@@ -565,6 +575,34 @@ with tab_replay:
                 r_bytes = rf.read()
             st.video(r_bytes, format="video/mp4")
             st.caption("Click '⚡ Run Safety Inference & Video Replay' above to generate annotated telemetry overlays.")
+
+        # --- Tier 2: Spatial Hazard Density Heatmap ---
+        active_heat = st.session_state.get("active_heatmap_path")
+        if active_heat and Path(active_heat).exists():
+            st.markdown("---")
+            st.markdown("#### 🔥 Spatial Hazard Density Heatmap & Hotspots")
+            st.caption("2D Gaussian thermal accumulation of all entity foot coordinates. High-risk track hotspots indicate where physical barriers or pedestrian bridges are required.")
+
+            h_c1, h_c2 = st.columns([1.4, 1])
+            with h_c1:
+                st.image(active_heat, caption="Thermal Trajectory Heatmap (Red = High Danger Concentration)", use_container_width=True)
+
+            with h_c2:
+                st.markdown("##### 📊 Spatial Safety Metrics")
+                h_metrics = st.session_state.get("active_heatmap_analytics") or {}
+                st.metric("Danger Zone Violation Ratio", f"{h_metrics.get('danger_zone_percentage', 0.0)}%")
+                st.metric("Total Foot Ground Contacts", h_metrics.get("total_foot_samples", 0))
+                pk = h_metrics.get("peak_hotspot_coordinate", {"x": "N/A", "y": "N/A"})
+                st.metric("Peak Violation Hotspot", f"X: {pk['x']}, Y: {pk['y']}")
+
+                with open(active_heat, "rb") as hf:
+                    st.download_button(
+                        label="⬇️ Download Heatmap PNG",
+                        data=hf.read(),
+                        file_name=Path(active_heat).name,
+                        mime="image/png",
+                        use_container_width=True,
+                    )
 
 # =============================================================================
 # TAB 2: REAL-TIME EVENT LOG
@@ -691,6 +729,36 @@ with tab_alerts:
                 use_container_width=True,
                 key=f"pdf_btn_{chosen_alert.alert_id}",
             )
+
+        # --- Tier 2: Instant Remote Push Notification (Telegram Bot & Webhook) ---
+        st.markdown("---")
+        st.markdown("##### 📲 Instant Remote Push Notification (Telegram Bot & Webhook Dispatcher)")
+        st.caption("Sends high-priority mobile notifications and photographic evidence directly to the Station Master or loco-pilot cab.")
+
+        mob_c1, mob_c2 = st.columns([1.6, 1])
+        with mob_c1:
+            tele_msg = AlertNotifier.format_telegram_alert_text(
+                alert_id=chosen_alert.alert_id,
+                severity=chosen_alert.severity,
+                crossing_state=service.current_crossing_state.value,
+                message=chosen_alert.message,
+                timestamp_sec=chosen_alert.timestamp,
+            )
+            st.code(tele_msg, language="markdown")
+        with mob_c2:
+            st.markdown("**Channel:** Telegram Bot API & REST Webhook")
+            st.caption("Photo Attachment: Active Forensic Snapshot")
+            if st.button("🚀 Dispatch Emergency Mobile Push", use_container_width=True):
+                notifier = AlertNotifier(dry_run=True)
+                res_tele = notifier.dispatch_telegram(tele_msg, photo_path=chosen_snap)
+                res_hook = notifier.dispatch_webhook({
+                    "alert_id": chosen_alert.alert_id,
+                    "event_id": chosen_alert.event_id,
+                    "severity": chosen_alert.severity,
+                    "message": chosen_alert.message,
+                    "crossing_state": service.current_crossing_state.value,
+                })
+                st.success("✅ Alert & Evidence Photo Dispatched to Station Master Mobile OCC (Simulated Push OK)!")
     else:
         st.info("No alerts generated yet.")
 

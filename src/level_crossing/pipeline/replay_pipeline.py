@@ -2,14 +2,17 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Dict, Optional, Any, Callable
+from typing import List, Dict, Optional, Any, Callable, Tuple
 import time
 import numpy as np
+import cv2
 
-from level_crossing.common.types import CrossingState, SeverityLevel, HealthStatus
+from level_crossing.common.types import CrossingState, SeverityLevel, HealthStatus, ZoneType
 from level_crossing.common.config import SystemConfig
 from level_crossing.common.logger import get_logger
 from level_crossing.detection.detector import BaseDetector, YOLOv8Detector
+from level_crossing.detection.train_approach_estimator import TrainApproachEstimator
+from level_crossing.analytics.hazard_heatmap import HazardHeatmapGenerator
 from level_crossing.tracking.tracker import ByteTracker
 from level_crossing.scene_state.zone_manager import ZoneManager, TrackSceneState
 from level_crossing.severity.matrix import SeverityMatrix
@@ -37,6 +40,9 @@ class ReplaySummary:
     system_health: HealthStatus
     elapsed_wall_time_sec: float
     average_fps: float
+    heatmap_path: Optional[str] = None
+    heatmap_analytics: Optional[Dict[str, Any]] = None
+    optical_train_detected: bool = False
 
 
 class ReplayPipeline:
@@ -90,6 +96,7 @@ class ReplayPipeline:
         output_video_path: Optional[str | Path] = None,
         on_frame_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
         max_frames: Optional[int] = None,
+        autonomous_train_sensing: bool = False,
     ) -> ReplaySummary:
         """Executes full replay pipeline over the input video or live stream."""
         reader = VideoReader(video_path, realtime_mode=False)
@@ -111,6 +118,12 @@ class ReplayPipeline:
         processed_frames = 0
         last_timestamp = 0.0
 
+        # Tier 2 Analytics & Optical Estimators
+        heatmap_gen = HazardHeatmapGenerator(width=metadata.width, height=metadata.height)
+        train_estimator = TrainApproachEstimator()
+        optical_train_approaching_seen = False
+        first_frame_bgr: Optional[np.ndarray] = None
+
         for frame in reader.frames():
             processed_frames += 1
             if max_frames is not None and processed_frames > max_frames:
@@ -118,17 +131,29 @@ class ReplayPipeline:
             timestamp = frame.timestamp_sec
             last_timestamp = timestamp
 
-            # Determine crossing state from timeline or default OPEN
+            if first_frame_bgr is None:
+                first_frame_bgr = frame.image.copy()
+
+            # 1. Detection
+            det_result = self.detector.detect(frame.image, frame.frame_idx, timestamp)
+
+            # Optical train approach evaluation
+            train_status = train_estimator.update(det_result.detections, timestamp)
+            if train_status.is_approaching:
+                optical_train_approaching_seen = True
+
+            # Determine crossing state from timeline, optical autonomous sensor, or default OPEN
             if crossing_state_timeline:
                 current_crossing_state = crossing_state_timeline(timestamp)
             else:
                 current_crossing_state = CrossingState.OPEN
 
+            # Unmanned Crossing Autonomous Override
+            if autonomous_train_sensing and train_status.is_approaching:
+                current_crossing_state = CrossingState.TRAIN_APPROACHING
+
             if current_crossing_state == CrossingState.UNKNOWN:
                 system_health = HealthStatus.DEGRADED
-
-            # 1. Detection
-            det_result = self.detector.detect(frame.image, frame.frame_idx, timestamp)
 
             # 2. Tracking
             tracks = self.tracker.update(det_result.detections, frame.frame_idx, timestamp)
@@ -149,6 +174,17 @@ class ReplayPipeline:
                 frame_height=frame.height,
                 timestamp=timestamp,
             )
+
+            # Spatial Hazard Heatmap Accumulation
+            for trk in tracks:
+                if trk.is_confirmed:
+                    is_in_danger = False
+                    for ss in filtered_scene_states:
+                        if ss.track_id == trk.track_id and ss.zone_type == ZoneType.DANGER_TRACK:
+                            is_in_danger = True
+                            break
+                    foot = trk.reference_point
+                    heatmap_gen.add_point(foot.x, foot.y, weight=2.5 if is_in_danger else 1.0, in_danger=is_in_danger)
 
             # 5. Severity Evaluation (Stateless)
             evaluated_pairs: List[Tuple[TrackSceneState, SeverityLevel]] = []
@@ -229,6 +265,19 @@ class ReplayPipeline:
 
         all_events = list(self.event_manager.closed_events) + list(self.event_manager.active_events.values())
 
+        # Synthesize Spatial Hazard Density Heatmap
+        heatmap_path = None
+        heatmap_analytics = heatmap_gen.get_analytics()
+        if output_video_path and first_frame_bgr is not None:
+            out_p = Path(output_video_path)
+            heatmap_file = out_p.with_name(f"heatmap_{out_p.stem}.png")
+            bg_rgb = cv2.cvtColor(first_frame_bgr, cv2.COLOR_BGR2RGB)
+            heatmap_rgb = heatmap_gen.generate_heatmap(bg_rgb, alpha=0.6)
+            heatmap_bgr = cv2.cvtColor(heatmap_rgb, cv2.COLOR_RGB2BGR)
+            cv2.imwrite(str(heatmap_file), heatmap_bgr)
+            heatmap_path = str(heatmap_file)
+            logger.info(f"Spatial Hazard Heatmap saved to {heatmap_path}")
+
         return ReplaySummary(
             video_source=str(video_path),
             total_frames_processed=processed_frames,
@@ -239,4 +288,7 @@ class ReplayPipeline:
             system_health=system_health,
             elapsed_wall_time_sec=total_wall_time,
             average_fps=fps,
+            heatmap_path=heatmap_path,
+            heatmap_analytics=heatmap_analytics,
+            optical_train_detected=optical_train_approaching_seen,
         )
