@@ -333,27 +333,61 @@ with tab_replay:
     col_ctrl, col_display = st.columns([1, 2])
 
     with col_ctrl:
-        st.markdown("#### Scenario Configuration")
-        available_videos = list(Path("data/controlled/validation").glob("*.mp4"))
-        video_options = [str(v) for v in available_videos if not v.name.startswith("annotated_")]
-
-        selected_video = st.selectbox(
-            "Select Video Scenario",
-            video_options if video_options else ["data/controlled/validation/scenario_01_person_danger_track.mp4"],
+        st.markdown("#### Video Ingestion Source")
+        
+        source_mode = st.radio(
+            "Source Selection Mode",
+            ["Preset Validation Scenarios", "Upload Custom Video (.mp4, .mov, .avi)", "Custom Local Path / Stream"],
+            horizontal=False,
+            label_visibility="collapsed",
         )
 
+        selected_video = "data/controlled/validation/scenario_01_person_danger_track.mp4"
+
+        if source_mode == "Preset Validation Scenarios":
+            available_videos = list(Path("data/controlled/validation").glob("*.mp4"))
+            video_options = [str(v) for v in available_videos if not v.name.startswith("annotated_")]
+            selected_video = st.selectbox(
+                "Select Scenario Footage",
+                video_options if video_options else ["data/controlled/validation/scenario_01_person_danger_track.mp4"],
+            )
+        elif source_mode == "Upload Custom Video (.mp4, .mov, .avi)":
+            uploaded_file = st.file_uploader(
+                "Upload Crossing / Pedestrian Video",
+                type=["mp4", "mov", "avi", "mkv"],
+                help="Upload any real or downloaded video of people/vehicles crossing tracks to test safety detection.",
+            )
+            if uploaded_file is not None:
+                upload_dir = Path("data/uploads")
+                upload_dir.mkdir(parents=True, exist_ok=True)
+                target_path = upload_dir / uploaded_file.name
+                with open(target_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                selected_video = str(target_path)
+                st.success(f"Loaded: `{uploaded_file.name}` ({len(uploaded_file.getbuffer()) / (1024*1024):.1f} MB)")
+            else:
+                st.info("Drag and drop any MP4/MOV video here to test.")
+        else:
+            custom_input = st.text_input(
+                "Local File Path or Stream URL",
+                value="data/controlled/validation/scenario_01_person_danger_track.mp4",
+                help="Absolute/relative video file path or RTSP/HTTP video stream URL",
+            )
+            selected_video = custom_input
+
         replay_state = st.selectbox(
-            "Crossing State for Replay",
+            "Simulated Crossing Interlock State",
             [CrossingState.TRAIN_APPROACHING, CrossingState.OPEN, CrossingState.TRAIN_PASSING, CrossingState.UNKNOWN],
             index=0,
             key="replay_state_select",
+            help="Simulates what signal the vision system receives from the railway signaling circuit during this video.",
         )
 
         st.markdown(
             """
             <div style="background-color: #1F2937; border-left: 4px solid #06B6D4; padding: 10px 14px; border-radius: 4px; margin: 14px 0;">
                 <p style="margin: 0; font-size: 0.8rem; color: #D1D5DB;">
-                    <b>Replay Mode Contract:</b> Processes every frame strictly using video timestamps as active clock. Never drops frames. Decision latency is tracked against ground truth.
+                    <b>Safety Engine Contract:</b> Evaluates every frame using YOLOv8 perception + ByteTrack tracking. Bottom-center foot coordinates are projected into calibrated safety zones. Dwell times $\ge 0.5s$ trigger confirmed alerts.
                 </p>
             </div>
             """,
@@ -363,19 +397,31 @@ with tab_replay:
         run_btn = st.button("⚡ Run Safety Inference & Video Replay", type="primary", use_container_width=True)
 
     with col_display:
-        if run_btn:
-            progress_bar = st.progress(0, text="Initializing Replay Pipeline with Apple MPS...")
-            pipeline = ReplayPipeline(config=config, db_path="data/level_crossing.sqlite3", save_to_db=True)
-            output_mp4 = "data/controlled/validation/annotated_scenario_01.mp4"
+        output_dir = Path("data/annotated_runs")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        video_stem = Path(selected_video).stem if selected_video else "scenario_01"
+        target_output_mp4 = str(output_dir / f"annotated_{video_stem}.mp4")
 
-            # Run with live status updates
+        if run_btn and selected_video and Path(selected_video).exists():
+            progress_bar = st.progress(0, text="Initializing Safety Pipeline with Apple MPS...")
+            pipeline = ReplayPipeline(config=config, db_path="data/level_crossing.sqlite3", save_to_db=True)
+
             t0 = time.time()
             summary = pipeline.run(
                 video_path=selected_video,
                 crossing_state_timeline=lambda t: replay_state,
-                output_video_path=output_mp4,
+                output_video_path=target_output_mp4,
             )
             progress_bar.progress(100, text=f"Replay complete in {summary.elapsed_wall_time_sec:.2f}s ({summary.average_fps:.1f} FPS)")
+
+            st.session_state["active_annotated_video"] = target_output_mp4
+            st.session_state["last_summary"] = {
+                "frames": summary.total_frames_processed,
+                "fps": summary.average_fps,
+                "events": summary.events_generated,
+                "alerts": summary.alerts_generated,
+                "wall_time": summary.elapsed_wall_time_sec,
+            }
 
             st.success(
                 f"✅ Replay Processed {summary.total_frames_processed} frames ({summary.duration_seconds:.1f}s) "
@@ -383,18 +429,28 @@ with tab_replay:
             )
             st.rerun()
 
-        # Display output video if exists
-        annotated_file = Path("data/controlled/validation/annotated_scenario_01.mp4")
-        if annotated_file.exists():
+        # Display active or default annotated video
+        active_video = st.session_state.get("active_annotated_video", target_output_mp4)
+        if not Path(active_video).exists():
+            active_video = "data/controlled/validation/annotated_scenario_01.mp4"
+
+        if Path(active_video).exists():
             st.markdown("#### 📺 Visual Telemetry Stream (Annotated)")
-            st.video(str(annotated_file))
+            st.video(str(active_video))
             st.caption("Overlays: Polygon safety zones (alpha-blended), ByteTrack bounding boxes, dwell timers, and telemetry banner.")
-        else:
-            raw_file = Path(selected_video)
-            if raw_file.exists():
-                st.markdown("#### 📺 Raw Scenario Footage")
-                st.video(str(raw_file))
-                st.caption("Click 'Run Safety Inference & Video Replay' to generate annotated telemetry overlays.")
+
+            with open(active_video, "rb") as vf:
+                st.download_button(
+                    label="⬇️ Download Annotated Video with Telemetry",
+                    data=vf.read(),
+                    file_name=Path(active_video).name,
+                    mime="video/mp4",
+                    use_container_width=True,
+                )
+        elif selected_video and Path(selected_video).exists():
+            st.markdown("#### 📺 Raw Scenario Footage")
+            st.video(str(selected_video))
+            st.caption("Click '⚡ Run Safety Inference & Video Replay' above to generate annotated telemetry overlays.")
 
 # =============================================================================
 # TAB 2: REAL-TIME EVENT LOG

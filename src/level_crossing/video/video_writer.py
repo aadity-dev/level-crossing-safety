@@ -189,3 +189,39 @@ class VideoWriter:
         if self._writer is not None:
             self._writer.release()
             self._writer = None
+            self._convert_to_h264_if_possible()
+
+    def _convert_to_h264_if_possible(self) -> None:
+        """Transcodes OpenCV mp4v output to H.264 for universal HTML5 browser playback."""
+        import shutil
+        import subprocess
+
+        ffmpeg_bin = shutil.which("ffmpeg")
+        if not ffmpeg_bin or not self.output_path.exists():
+            return
+
+        temp_h264 = self.output_path.with_name(f"{self.output_path.stem}_h264.mp4")
+        try:
+            cmd = [
+                ffmpeg_bin,
+                "-y",
+                "-i",
+                str(self.output_path),
+                "-vcodec",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "23",
+                str(temp_h264),
+            ]
+            res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+            if res.returncode == 0 and temp_h264.exists() and temp_h264.stat().st_size > 0:
+                temp_h264.replace(self.output_path)
+                logger.info(f"Successfully converted {self.output_path} to browser-compatible H.264")
+        except Exception as e:
+            logger.warning(f"Could not convert {self.output_path} to H.264: {e}")
+            if temp_h264.exists():
+                temp_h264.unlink(missing_ok=True)
