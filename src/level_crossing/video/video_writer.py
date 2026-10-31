@@ -211,6 +211,8 @@ class VideoWriter:
                 "libx264",
                 "-pix_fmt",
                 "yuv420p",
+                "-movflags",
+                "+faststart",
                 "-preset",
                 "veryfast",
                 "-crf",

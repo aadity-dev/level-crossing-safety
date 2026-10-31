@@ -89,8 +89,9 @@ class ReplayPipeline:
         crossing_state_timeline: Optional[Callable[[float], CrossingState]] = None,
         output_video_path: Optional[str | Path] = None,
         on_frame_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        max_frames: Optional[int] = None,
     ) -> ReplaySummary:
-        """Executes full replay pipeline over the input video."""
+        """Executes full replay pipeline over the input video or live stream."""
         reader = VideoReader(video_path, realtime_mode=False)
         metadata = reader.metadata
         logger.info(f"Starting replay on {video_path} ({metadata.total_frames} frames @ {metadata.fps:.1f}fps)")
@@ -112,6 +113,8 @@ class ReplayPipeline:
 
         for frame in reader.frames():
             processed_frames += 1
+            if max_frames is not None and processed_frames > max_frames:
+                break
             timestamp = frame.timestamp_sec
             last_timestamp = timestamp
 

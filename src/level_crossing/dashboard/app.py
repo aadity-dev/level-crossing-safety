@@ -3,6 +3,9 @@
 import streamlit as st
 import time
 from pathlib import Path
+import urllib.parse
+import urllib.request
+import hashlib
 import pandas as pd
 import numpy as np
 from PIL import Image
@@ -323,6 +326,72 @@ tab_replay, tab_events, tab_alerts, tab_evidence, tab_matrix, tab_edge = st.tabs
     "⚙️ Edge-Proxy & Benchmarks",
 ])
 
+def resolve_or_download_video(source_str: str) -> tuple[str, str | None, bool]:
+    """Resolves local paths, downloads remote video links via yt-dlp/urllib, or handles RTSP streams.
+    Returns (resolved_path_or_url, error_message, is_live_stream).
+    """
+    source_str = source_str.strip()
+    if not source_str:
+        return "", "Please enter a valid video link or path.", False
+
+    # 1. Local file path
+    p = Path(source_str)
+    if p.exists() and p.is_file():
+        return str(p.resolve()), None, False
+
+    # 2. Live RTSP / RTSPS stream
+    if source_str.startswith(("rtsp://", "rtsps://")):
+        return source_str, None, True
+
+    # 3. HTTP / HTTPS link (YouTube, Vimeo, direct MP4, or live HTTP/HLS stream)
+    if source_str.startswith(("http://", "https://")):
+        if ".m3u8" in source_str.lower():
+            return source_str, None, True
+
+        upload_dir = Path("data/uploads")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+
+        parsed_path = urllib.parse.urlparse(source_str).path
+        ext = Path(parsed_path).suffix.lower()
+        if ext in [".mp4", ".mov", ".avi", ".mkv"]:
+            hashed = hashlib.md5(source_str.encode()).hexdigest()[:8]
+            target_file = upload_dir / f"web_{hashed}{ext}"
+            if not target_file.exists():
+                try:
+                    urllib.request.urlretrieve(source_str, str(target_file))
+                except Exception as e:
+                    return "", f"Failed to download direct video URL: {e}", False
+            return str(target_file.resolve()), None, False
+
+        # Otherwise, resolve with yt-dlp (YouTube, Google Drive, Vimeo, etc.)
+        try:
+            import yt_dlp
+
+            hashed = hashlib.md5(source_str.encode()).hexdigest()[:8]
+            out_tmpl = str(upload_dir / f"yt_{hashed}.%(ext)s")
+            ydl_opts = {
+                "format": "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                "outtmpl": out_tmpl,
+                "quiet": True,
+                "no_warnings": True,
+                "noplaylist": True,
+                "max_filesize": 100 * 1024 * 1024,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(source_str, download=True)
+                filename = ydl.prepare_filename(info)
+                fpath = Path(filename)
+                if not fpath.exists():
+                    mp4_p = fpath.with_suffix(".mp4")
+                    if mp4_p.exists():
+                        filename = str(mp4_p)
+            return str(Path(filename).resolve()), None, False
+        except Exception as e:
+            return "", f"Failed to resolve video stream from URL: {e}", False
+
+    return "", f"Path or stream URL not found: {source_str}", False
+
+
 # =============================================================================
 # TAB 1: REPLAY & INFERENCE STUDIO
 # =============================================================================
@@ -337,7 +406,11 @@ with tab_replay:
         
         source_mode = st.radio(
             "Source Selection Mode",
-            ["Preset Validation Scenarios", "Upload Custom Video (.mp4, .mov, .avi)", "Custom Local Path / Stream"],
+            [
+                "Preset Validation Scenarios",
+                "Upload Custom Video (.mp4, .mov, .avi)",
+                "Video Link / YouTube / RTSP Stream / Local Path",
+            ],
             horizontal=False,
             label_visibility="collapsed",
         )
@@ -369,9 +442,10 @@ with tab_replay:
                 st.info("Drag and drop any MP4/MOV video here to test.")
         else:
             custom_input = st.text_input(
-                "Local File Path or Stream URL",
-                value="data/controlled/validation/scenario_01_person_danger_track.mp4",
-                help="Absolute/relative video file path or RTSP/HTTP video stream URL",
+                "Enter Video URL, YouTube Link, or RTSP Stream",
+                value="",
+                placeholder="e.g. https://www.youtube.com/watch?v=... or rtsp://... or /path/to/video.mp4",
+                help="Paste any YouTube video link, direct .mp4 URL, RTSP live stream, or local path.",
             )
             selected_video = custom_input
 
@@ -402,32 +476,43 @@ with tab_replay:
         video_stem = Path(selected_video).stem if selected_video else "scenario_01"
         target_output_mp4 = str(output_dir / f"annotated_{video_stem}.mp4")
 
-        if run_btn and selected_video and Path(selected_video).exists():
-            progress_bar = st.progress(0, text="Initializing Safety Pipeline with Apple MPS...")
-            pipeline = ReplayPipeline(config=config, db_path="data/level_crossing.sqlite3", save_to_db=True)
+        if run_btn:
+            if not selected_video:
+                st.warning("Please choose a preset scenario, upload a file, or enter a video link first.")
+            else:
+                with st.spinner("Resolving video source and preparing inference pipeline..."):
+                    resolved_src, err_msg, is_stream = resolve_or_download_video(selected_video)
 
-            t0 = time.time()
-            summary = pipeline.run(
-                video_path=selected_video,
-                crossing_state_timeline=lambda t: replay_state,
-                output_video_path=target_output_mp4,
-            )
-            progress_bar.progress(100, text=f"Replay complete in {summary.elapsed_wall_time_sec:.2f}s ({summary.average_fps:.1f} FPS)")
+                if err_msg:
+                    st.error(f"❌ {err_msg}")
+                elif resolved_src:
+                    progress_bar = st.progress(0, text="Initializing Safety Pipeline with Apple MPS...")
+                    pipeline = ReplayPipeline(config=config, db_path="data/level_crossing.sqlite3", save_to_db=True)
 
-            st.session_state["active_annotated_video"] = target_output_mp4
-            st.session_state["last_summary"] = {
-                "frames": summary.total_frames_processed,
-                "fps": summary.average_fps,
-                "events": summary.events_generated,
-                "alerts": summary.alerts_generated,
-                "wall_time": summary.elapsed_wall_time_sec,
-            }
+                    t0 = time.time()
+                    max_f = 300 if is_stream else None
+                    summary = pipeline.run(
+                        video_path=resolved_src,
+                        crossing_state_timeline=lambda t: replay_state,
+                        output_video_path=target_output_mp4,
+                        max_frames=max_f,
+                    )
+                    progress_bar.progress(100, text=f"Replay complete in {summary.elapsed_wall_time_sec:.2f}s ({summary.average_fps:.1f} FPS)")
 
-            st.success(
-                f"✅ Replay Processed {summary.total_frames_processed} frames ({summary.duration_seconds:.1f}s) "
-                f"at {summary.average_fps:.1f} FPS. Generated {summary.events_generated} events and {summary.alerts_generated} alerts."
-            )
-            st.rerun()
+                    st.session_state["active_annotated_video"] = target_output_mp4
+                    st.session_state["last_summary"] = {
+                        "frames": summary.total_frames_processed,
+                        "fps": summary.average_fps,
+                        "events": summary.events_generated,
+                        "alerts": summary.alerts_generated,
+                        "wall_time": summary.elapsed_wall_time_sec,
+                    }
+
+                    st.success(
+                        f"✅ Replay Processed {summary.total_frames_processed} frames ({summary.duration_seconds:.1f}s) "
+                        f"at {summary.average_fps:.1f} FPS. Generated {summary.events_generated} events and {summary.alerts_generated} alerts."
+                    )
+                    st.rerun()
 
         # Display active or default annotated video
         active_video = st.session_state.get("active_annotated_video", target_output_mp4)
@@ -436,20 +521,23 @@ with tab_replay:
 
         if Path(active_video).exists():
             st.markdown("#### 📺 Visual Telemetry Stream (Annotated)")
-            st.video(str(active_video))
+            with open(active_video, "rb") as vf:
+                v_bytes = vf.read()
+            st.video(v_bytes, format="video/mp4")
             st.caption("Overlays: Polygon safety zones (alpha-blended), ByteTrack bounding boxes, dwell timers, and telemetry banner.")
 
-            with open(active_video, "rb") as vf:
-                st.download_button(
-                    label="⬇️ Download Annotated Video with Telemetry",
-                    data=vf.read(),
-                    file_name=Path(active_video).name,
-                    mime="video/mp4",
-                    use_container_width=True,
-                )
+            st.download_button(
+                label="⬇️ Download Annotated Video with Telemetry",
+                data=v_bytes,
+                file_name=Path(active_video).name,
+                mime="video/mp4",
+                use_container_width=True,
+            )
         elif selected_video and Path(selected_video).exists():
             st.markdown("#### 📺 Raw Scenario Footage")
-            st.video(str(selected_video))
+            with open(selected_video, "rb") as rf:
+                r_bytes = rf.read()
+            st.video(r_bytes, format="video/mp4")
             st.caption("Click '⚡ Run Safety Inference & Video Replay' above to generate annotated telemetry overlays.")
 
 # =============================================================================
