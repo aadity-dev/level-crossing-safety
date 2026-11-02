@@ -90,7 +90,8 @@ data/annotated_runs/
 data/cache/
 data/public/
 data/controlled/validation/annotated_*
-data/controlled/validation/output_test.mp4
+data/controlled/validation/*output*
+data/controlled/validation/*test*
 runs/
 *.pdf
 
@@ -114,6 +115,8 @@ coverage.xml
 .DS_Store
 .DS_Store?
 ._*
+Icon?
+Icon*
 .Spotlight-V100
 .Trashes
 ehthumbs.db

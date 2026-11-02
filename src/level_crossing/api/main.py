@@ -10,6 +10,7 @@ from level_crossing.common.config import SystemConfig
 from level_crossing.common.logger import get_logger
 from level_crossing.database.db import DatabaseManager
 from level_crossing.api.services.safety_service import SafetyService
+from level_crossing.alerts.bot_service import get_default_bot_service
 from level_crossing.api.websocket_manager import ws_manager
 from level_crossing.api.routes import health, events, alerts, videos, system, telegram, evidence
 
@@ -28,10 +29,15 @@ def create_app(config_dir: str = "configs", db_path: str = "data/level_crossing.
         logger.info("Initializing Level Crossing Safety System API...")
         app.state.db_manager = db_manager
         app.state.safety_service = safety_service
+        bot_svc = get_default_bot_service()
+        if bot_svc.is_configured:
+            bot_svc.start()
         logger.info("API initialized and operational.")
         yield
         # Shutdown
         logger.info("Shutting down API.")
+        if bot_svc.is_running:
+            bot_svc.stop()
 
     app = FastAPI(
         title="Level Crossing Safety Monitoring System API",
