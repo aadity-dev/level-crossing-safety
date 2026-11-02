@@ -1,25 +1,25 @@
 {
   "pytorch_cpu": {
     "target": "PyTorch CPU",
-    "mean_ms": 48.94,
-    "p50_ms": 47.14,
-    "p95_ms": 60.47,
-    "fps": 20.4
+    "mean_ms": 44.48,
+    "p50_ms": 44.51,
+    "p95_ms": 45.52,
+    "fps": 22.5
   },
   "apple_silicon_mps": {
     "target": "Apple Silicon MPS (Metal)",
-    "mean_ms": 17.32,
-    "p50_ms": 15.61,
-    "p95_ms": 22.94,
-    "fps": 57.7
+    "mean_ms": 17.25,
+    "p50_ms": 16.92,
+    "p95_ms": 23.29,
+    "fps": 58.0
   },
   "onnx_runtime_edge_proxy": {
     "target": "ONNX Runtime CPU (Edge-Proxy Benchmark)",
-    "mean_ms": 50.14,
-    "p50_ms": 48.13,
-    "p95_ms": 71.55,
-    "fps": 19.9,
+    "mean_ms": 38.43,
+    "p50_ms": 37.99,
+    "p95_ms": 42.72,
+    "fps": 26.0,
     "classification": "Edge-Proxy Benchmark (ARM64/x86 host CPU surrogate)"
   },
-  "memory_footprint_mb": 688.56
+  "memory_footprint_mb": 749.05
 }
